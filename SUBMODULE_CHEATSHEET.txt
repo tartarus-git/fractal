@@ -17,8 +17,7 @@ Use --recurse-submodules on git clone and problem solved. You've got this in you
 
 If you forget to do that and/or you've got a project that's already there but with the submodule hulls, no issue, just do this:
 
-	git submodule init <-- I think this takes the data stored in the .gitsubmodule files (which ARE there, along with the .git file in the otherwise empty
-submodule folder) and puts it in your master .git/config file so that your master project knows about the submodules.
+	git submodule init <-- I think this takes the data stored in the .gitsubmodules file and puts it in your master .git/config file so that your master project knows about the submodules.
 				It's very weird that the project doesn't just clone with the .git/config stuff inside but whatever.
 
 	THEN

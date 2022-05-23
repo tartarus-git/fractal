@@ -1,9 +1,9 @@
 [submodule "deps/opencl-bindings-and-helpers"]
-	path = deps/opencl-bindings-and-helpers
+	path = fractal/deps/opencl-bindings-and-helpers
 	url = git@github.com:tartarus-git/opencl-bindings-and-helpers.git
 [submodule "deps/nmath"]
-	path = deps/nmath
+	path = fractal/deps/nmath
 	url = git@github.com:tartarus-git/nmath.git
 [submodule "deps/window-setup"]
-	path = deps/window-setup
+	path = fractal/deps/window-setup
 	url = git@github.com:tartarus-git/window-setup.git
