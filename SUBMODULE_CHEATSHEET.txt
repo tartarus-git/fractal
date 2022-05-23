@@ -1,0 +1,68 @@
+Adding a submodule to your project:
+
+	git submodule add <URL> [path of the folder where it should be located]
+
+That will cause changes to be staged in your staging area, so commit the submodule add.
+
+When you diff the master project, subproject diffs don't get shown, they get abbreviated with commit hashes or something.
+Anyway, if you want a nicer diff, use git diff --submodule to get all the submodule changes too. You've already got this in your config though so git diff
+will work fine for you anyway.
+
+THAT'S ALL YOU NEED TO DO IF YOUR ADDING SUBMODULES TO AN EXISTING PROJECT.
+
+Cloning a project with submodules:
+
+When you clone, you don't get the submodules, you get hulls for those submodules, but their files aren't filled in.
+Use --recurse-submodules on git clone and problem solved. You've got this in your config so you don't even need to worry about this.
+
+If you forget to do that and/or you've got a project that's already there but with the submodule hulls, no issue, just do this:
+
+	git submodule init <-- I think this takes the data stored in the .gitsubmodule files (which ARE there, along with the .git file in the otherwise empty
+submodule folder) and puts it in your master .git/config file so that your master project knows about the submodules.
+				It's very weird that the project doesn't just clone with the .git/config stuff inside but whatever.
+
+	THEN
+
+	git submodule update	<-- fetch and merge new changes and stuff into all the submodules (toplevel ones)
+
+	ALTERNATIVELY
+
+	just do git submodule update --init <-- combines both steps, it doesn't init again if it happens to already be initialized, so don't worry about that.
+	
+	ALSO: do git submodule update --init --recursive to go through all submodules, even submodules of submodules.
+
+
+Getting upstream changes from remote in the submodules:
+
+	Very easy, just go to the submodule and do normal git things like you would.
+
+	OR
+
+	From your master repo, just run git submodule update --remote (you might also need --recursive but I don't know, probably though)
+
+
+// NOTE: The difference between specifying --remote and not doing so is this (I think):
+	- --remote will get changes from the remote and apply them to your submodules.
+
+	- not doing so will basically ask the master repo which commit of the submodule is associated with the master repos current state (because it keeps track of
+		that), and if the submodule commit is outdated, it'll then fetch new data from the remote.
+
+	(--remote will of course also update the commit that the master repo associates with it's current state, so that nothing breaks.)
+
+
+
+Pulling master repo changes and submodule changes:
+
+	git pull <-- will get changes and merge them, but it will only GET submodule changes. That means they will be recorded and they will be there, but they won't
+			be actually applied to the submodules until you give the go ahead. Why is it like this? No idea.
+
+	Basically, then do:
+
+	git submodule update (--init because the pull might have added new submodules, in which case they have to be initialized, and --recursive because obvious)
+
+
+	BUT:
+
+	You can do git pull --recurse-submodules and it'll handle all of the above for you.
+
+	BUT: You've got that in your config so you really only need to do git pull.
