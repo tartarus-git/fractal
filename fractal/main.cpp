@@ -1,13 +1,10 @@
 #define WINDOW_TITLE "Blackhole"
 #define WINDOW_CLASS_NAME "BLACKHOLE_SIM_WINDOW"
-#include "window/windowSetup.h"
-
-#include "OpenCL/OpenCLBindingsAndHelpers.h"
-#include "OpenCL/specificHelpers.h"
-
-#include "rendering/Renderer.h"
+#include "windowSetup.h"
 
 #include "logging/debugOutput.h"
+
+#include "cl_bindings_and_helpers.h"
 
 #define FOV_VALUE 120
 
@@ -24,9 +21,6 @@ namespace keys {
 	bool space = false;
 	bool ctrl = false;
 }
-
-Camera camera;
-Renderer renderer;
 
 unsigned int halfWindowWidth;
 unsigned int halfWindowHeight;
@@ -136,6 +130,8 @@ void updateWindowSizeVars() {
 void graphicsLoop() {
 	updateWindowSizeVars();
 	windowResized = false;
+
+	fractal::Scene mainScene();
 
 	if (!renderer.init(windowWidth, windowHeight)) { POST_THREAD_EXIT; return; }
 
