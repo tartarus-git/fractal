@@ -35,18 +35,20 @@ public:
 	}
 
 	void setCameraFOV(float FOV) override {
-		// TODO: set args in the kernel.
+		clSetKernelArg(computeKernel, 5, sizeof(nmath::Vector3f), &FOV);
 	}
 
-	void setScene(cl_mem computeScene, size_t computeSceneLength) override {
-		// TODO: set args in the kernel.
+	void setScene(cl_mem computeScene, uint64_t computeSceneLength) override {
+		clSetKernelArg(computeKernel, 6, sizeof(cl_mem), &computeScene);
+		clSetKernelArg(computeKernel, 7, sizeof(uint64_t), &computeSceneLength);
 	}
 
-	void setMaterialHeap(cl_mem computeMaterialHeap, size_t computeMaterialHeapLength) override {
-		// TODO: set args in the kernel.
+	void setMaterialHeap(cl_mem computeMaterialHeap, uint64_t computeMaterialHeapLength) override {
+		clSetKernelArg(computeKernel, 8, sizeof(cl_mem), &computeMaterialHeap);
+		clSetKernelArg(computeKernel, 9, sizeof(uint64_t), &computeMaterialHeapLength);
 	}
 
-	void setMaterialHeapOffset(size_t computeMaterialHeapOffset) override {
-		// TODO: set args in the kernel.
+	void setMaterialHeapOffset(uint64_t computeMaterialHeapOffset) override {
+		clSetKernelArg(computeKernel, 10, sizeof(uint64_t), &computeMaterialHeapOffset);
 	}
 };

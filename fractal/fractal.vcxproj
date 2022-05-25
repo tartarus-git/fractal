@@ -159,6 +159,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="DefaultShader.h" />
     <ClInclude Include="deps\nmath\include\nmath\vectors\Vector3f.h" />
+    <ClInclude Include="deps\nmath\include\nmath\vectors\Vector4f.h" />
     <ClInclude Include="deps\opencl-bindings-and-helpers\include\cl_bindings_and_helpers.h" />
     <ClInclude Include="deps\window-setup\include\logging\debugOutput.h" />
     <ClInclude Include="deps\window-setup\include\windowSetup.h" />

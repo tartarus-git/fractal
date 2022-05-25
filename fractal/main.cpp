@@ -138,11 +138,26 @@ void graphicsLoop() {
 
 	DefaultShader mainShader;
 	ErrorCode err = Renderer::init(&mainShader, windowWidth, windowHeight);
-	Camera camera;
+	Camera camera({ 0, 0, 0 }, { 0, 0, 0 }, 130);
 	Renderer::loadCamera(camera);
 	Renderer::transferCameraPosition();
 	Renderer::transferCameraRotation();
 	Renderer::transferCameraFOV();
+
+	Entity entities[] = { { { 0, -505, -20, 0 }, { 0, 0, 0, 0 }, { 500, 0, 0, 0 } },
+	 { { 0, 505, -20, 0 }, { 0, 0, 0, 0 }, { 500, 0, 0, 0 } },
+		{ { 0, 0, -20, 0 }, { 0, 0, 0, 0 }, { 5, 0, 0, 0 } } };
+	Renderer::loadScene(Scene(entities, 3));
+
+	Material materials[] = { { { 1, 1, 1 } } };
+	ResourceHeap resources(materials, 0, 1);
+	Renderer::loadResources(std::move(resources));
+
+	err = Renderer::transferResources();
+	debuglogger::out << "tran res err: " << (int16_t)err << '\n';
+	err = Renderer::transferScene();
+	debuglogger::out << "tran scene err: " << (int16_t)err << '\n';
+
 
 
 

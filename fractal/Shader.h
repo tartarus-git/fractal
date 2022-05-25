@@ -30,8 +30,8 @@ public:
 	virtual void setCameraRotation(nmath::Vector3f rotation) = 0;
 	virtual void setCameraFOV(float FOV) = 0;
 
-	virtual void setScene(cl_mem computeScene, size_t computeSceneLength) = 0;
+	virtual void setScene(cl_mem computeScene, uint64_t computeSceneLength) = 0;
 
-	virtual void setMaterialHeap(cl_mem computeMaterialHeap, size_t computeMaterialHeapLength) = 0;
-	virtual void setMaterialHeapOffset(size_t computeMaterialHeapOffset) = 0;
+	virtual void setMaterialHeap(cl_mem computeMaterialHeap, uint64_t computeMaterialHeapLength) = 0;
+	virtual void setMaterialHeapOffset(uint64_t computeMaterialHeapOffset) = 0;
 };

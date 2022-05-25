@@ -10,11 +10,12 @@ public:
 	size_t length;
 
 	constexpr Scene() = default;
-	constexpr Scene(Entity* entities) : entities(entities) { }
+	constexpr Scene(Entity* entities, size_t length) : entities(entities), length(length) { }
 
 	constexpr Scene& operator=(Scene&& right) {
 		entities = right.entities;
 		right.entities = nullptr;
+		length = right.length;
 		return *this;
 	}
 

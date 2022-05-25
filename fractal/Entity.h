@@ -1,12 +1,12 @@
 #pragma once
 
-#include "nmath/vectors/Vector3f.h"
+#include "nmath/vectors/Vector4f.h"
 
 #include "cl_bindings_and_helpers.h"
 
 struct Entity {
-	nmath::Vector3f position;
-	nmath::Vector3f rotation;
-	nmath::Vector3f scale;
-	cl_uint material;
+	nmath::Vector4f position;
+	nmath::Vector4f rotation;
+	nmath::Vector4f scale;
+	//cl_uint material;
 };

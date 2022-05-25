@@ -77,6 +77,9 @@
     <ClInclude Include="DefaultShader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="deps\nmath\include\nmath\vectors\Vector4f.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="raytracer.cl" />

@@ -131,16 +131,18 @@ void Renderer::loadResources(ResourceHeap&& resources) {
 
 ErrorCode Renderer::transferResources() {
 	if (resources.materialHeapLength == 0) { return ErrorCode::INVALID_MATERIAL_HEAP_LENGTH; }
-	if (resources.materialHeapLength == computeMaterialHeapLength) {
-		if (clEnqueueWriteBuffer(computeCommandQueue, computeMaterialHeap, true, 0, computeMaterialHeapLength * sizeof(Material), resources.materialHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
-			return ErrorCode::DEVICE_MATERIAL_HEAP_WRITE_FAILED;
+	if (computeMaterialHeapLength != 0) {
+		if (resources.materialHeapLength == computeMaterialHeapLength) {
+			if (clEnqueueWriteBuffer(computeCommandQueue, computeMaterialHeap, true, 0, computeMaterialHeapLength * sizeof(Material), resources.materialHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
+				return ErrorCode::DEVICE_MATERIAL_HEAP_WRITE_FAILED;
+			}
+			return ErrorCode::SUCCESS;
 		}
-		return ErrorCode::SUCCESS;
+		if (clReleaseMemObject(computeMaterialHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_MATERIAL_HEAP_FAILED; }
 	}
-	if (clReleaseMemObject(computeMaterialHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_MATERIAL_HEAP_FAILED; }
 	cl_int err;
-	computeMaterialHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY, resources.materialHeapLength * sizeof(Material), resources.materialHeap, &err);
-	if (!computeMaterialHeap) { return ErrorCode::DEVICE_MATERIAL_HEAP_REALLOCATION_AND_WRITE_FAILED; }
+	computeMaterialHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, resources.materialHeapLength * sizeof(Material), resources.materialHeap, &err);
+	if (!computeMaterialHeap) { computeMaterialHeapLength = 0; return ErrorCode::DEVICE_MATERIAL_HEAP_REALLOCATION_AND_WRITE_FAILED; }
 	computeMaterialHeapLength = resources.materialHeapLength;
 	shader->setMaterialHeap(computeMaterialHeap, computeMaterialHeapLength);
 
@@ -158,15 +160,17 @@ void Renderer::loadScene(Scene&& scene) {
 
 ErrorCode Renderer::transferScene() {
 	if (scene.length == 0) { return ErrorCode::INVALID_SCENE_LENGTH; }
-	if (scene.length == computeSceneLength) {
-		if (clEnqueueWriteBuffer(computeCommandQueue, computeScene, true, 0, computeSceneLength * sizeof(Entity), scene.entities, 0, nullptr, nullptr) != CL_SUCCESS) {
-			return ErrorCode::DEVICE_SCENE_WRITE_FAILED;
+	if (computeSceneLength != 0) {
+		if (scene.length == computeSceneLength) {
+			if (clEnqueueWriteBuffer(computeCommandQueue, computeScene, true, 0, computeSceneLength * sizeof(Entity), scene.entities, 0, nullptr, nullptr) != CL_SUCCESS) {
+				return ErrorCode::DEVICE_SCENE_WRITE_FAILED;
+			}
+			return ErrorCode::SUCCESS;
 		}
-		return ErrorCode::SUCCESS;
+		if (clReleaseMemObject(computeScene) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_SCENE_FAILED; }
 	}
-	if (clReleaseMemObject(computeScene) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_SCENE_FAILED; }
 	cl_int err;
-	computeScene = clCreateBuffer(computeContext, CL_MEM_READ_ONLY, scene.length * sizeof(Entity), scene.entities, &err);
+	computeScene = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, scene.length * sizeof(Entity), scene.entities, &err);
 	if (!computeScene) { computeSceneLength = 0; return ErrorCode::DEVICE_SCENE_REALLOCATION_AND_WRITE_FAILED; }
 	computeSceneLength = scene.length;
 	shader->setScene(computeScene, computeSceneLength);
