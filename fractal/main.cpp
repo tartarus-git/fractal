@@ -4,7 +4,10 @@
 
 #include "logging/debugOutput.h"
 
-#include "cl_bindings_and_helpers.h"
+#include "Renderer.h"
+#include "Shader.h"
+#include "DefaultShader.h"
+#include "Camera.h"
 
 #define FOV_VALUE 120
 
@@ -131,61 +134,22 @@ void graphicsLoop() {
 	updateWindowSizeVars();
 	windowResized = false;
 
-	fractal::Scene mainScene();
 
-	if (!renderer.init(windowWidth, windowHeight)) { POST_THREAD_EXIT; return; }
 
-	camera = Camera(Vector3f(0, 0, 0), Vector3f(0, 0, 0), FOV_VALUE);
-	Matrix4f cameraRotMat = Matrix4f::createRotationMat(camera.rot);
+	DefaultShader mainShader;
+	ErrorCode err = Renderer::init(&mainShader, windowWidth, windowHeight);
+	Camera camera;
+	Renderer::loadCamera(camera);
+	Renderer::transferCameraPosition();
+	Renderer::transferCameraRotation();
+	Renderer::transferCameraFOV();
 
-	renderer.calculateRayOriginBasis(camera.FOV);
 
-	if (!renderer.loadCameraPos(&camera.pos)) {
-		debuglogger::out << debuglogger::error << "failed to load camera pos into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
 
-	if (!renderer.loadRayOrigin(windowWidth, windowHeight)) {
-		debuglogger::out << debuglogger::error << "failed to load ray origin into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
-
-	if (!renderer.loadCameraRotMat(&cameraRotMat)) {
-		debuglogger::out << debuglogger::error << "failed to load camera rotation into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
-
-	Skybox skybox;
-	if (!renderer.loadSkybox(&skybox)) {
-		debuglogger::out << debuglogger::error << "failed to load skybox into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
-
-	Blackhole blackhole = Blackhole(Vector3f(0, 0, -20), 15, 30);
-	if (!renderer.loadBlackholePos(&blackhole.pos)) {
-		debuglogger::out << debuglogger::error << "failed to load blackhole position into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
-
-	if (!renderer.loadBlackholeMass(300)) {
-		debuglogger::out << debuglogger::error << "failed to load blackhole mass into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
-
-	if (!renderer.loadBlackholeBlackRadius(blackhole.blackRadius)) {
-		debuglogger::out << debuglogger::error << "failed to load blackhole black radius into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
-
-	if (!renderer.loadBlackholeInfluenceRadius(blackhole.influenceRadius)) {
-		debuglogger::out << debuglogger::error << "failed to load blackhole influence radius into compute device" << debuglogger::endl;
-		POST_THREAD_EXIT; renderer.release(); return;
-	}
 
 	HDC finalG = GetDC(hWnd);
 	HBITMAP bmp = CreateCompatibleBitmap(finalG, windowWidth, windowHeight);
 	size_t outputFrame_size = windowWidth * windowHeight * 4;
-	char* outputFrame = new char[outputFrame_size];
 	HDC g = CreateCompatibleDC(finalG);
 	HBITMAP defaultBmp = (HBITMAP)SelectObject(g, bmp);
 
@@ -193,17 +157,16 @@ void graphicsLoop() {
 	captureKeyboard = true;
 
 	while (isAlive) {
-		if (!renderer.render(outputFrame)) {
-			debuglogger::out << debuglogger::error << "failed to render scene" << debuglogger::endl;
-			EXIT_FROM_THREAD;
-		}
 
-		if (!SetBitmapBits(bmp, outputFrame_size, outputFrame)) {			// TODO: Replace this copy (which is unnecessary), with a direct access to the bitmap bits.
-			debuglogger::out << debuglogger::error << "failed to set bmp bits" << debuglogger::endl;
+		err = Renderer::render();
+		debuglogger::out << (int16_t)err << '\n';
+
+		if (!SetBitmapBits(bmp, outputFrame_size, Renderer::frame)) {			// TODO: Replace this copy (which is unnecessary), with a direct access to the bitmap bits.
+			debuglogger::out << debuglogger::error << "failed to set bmp bits\n";
 			EXIT_FROM_THREAD;
 		}
 		if (!BitBlt(finalG, 0, 0, windowWidth, windowHeight, g, 0, 0, SRCCOPY)) {
-			debuglogger::out << debuglogger::error << "failed to copy g into finalG" << debuglogger::endl;
+			debuglogger::out << debuglogger::error << "failed to copy g into finalG\n";
 			EXIT_FROM_THREAD;
 		}
 
@@ -211,35 +174,20 @@ void graphicsLoop() {
 			windowResized = false;			// Doing this at beginning leaves space for size event handler to set it to true again while we're recallibrating, which minimizes the chance that the window gets stuck with a drawing surface that doesn't match it's size.
 			updateWindowSizeVars();			// NOTE: The chance that something goes wrong with the above is astronomically low and basically zero because size events get fired after resizing is done and user can't start and stop another size move fast enough to trip us up.
 
-			if (!renderer.recallibrateAfterWindowResize(windowWidth, windowHeight)) {
-				debuglogger::out << debuglogger::error << "failed to recallibrate renderer after window resize" << debuglogger::endl;
-				POST_THREAD_EXIT; renderer.release(); return;
-			}
-
-			if (!renderer.loadRayOrigin(windowWidth, windowHeight)) {
-				debuglogger::out << debuglogger::error << "failed to load ray origin into compute device" << debuglogger::endl;
-				POST_THREAD_EXIT; renderer.release(); return;
-			}
-			
 			// Resize GDI stuff.
 			SelectObject(g, defaultBmp);			// Deselect our bmp by replacing it with the defaultBmp that we got from above.
 			DeleteObject(bmp);
 			bmp = CreateCompatibleBitmap(finalG, windowWidth, windowHeight);
 			SelectObject(g, bmp);
-			delete[] outputFrame;
-			outputFrame_size = windowWidth * windowHeight * 4;
-			outputFrame = new char[outputFrame_size];
 
 			continue;
 		}
 
 		if (pendingMouseMove) {
-			camera.rot.x += mouseMoveX * LOOK_SENSITIVITY_X;			// TODO: Probably prevent this from overflowing by checking if the rot changes break 2pi boundaries and then subtracting by camera.rot.x / 2pi.
-			camera.rot.y -= mouseMoveY * LOOK_SENSITIVITY_Y;
 			pendingMouseMove = false;
 		}
 
-		Vector3f moveVector = { };
+		/*Vector3f moveVector = { };
 		if (keys::w) { moveVector.z -= MOVE_SENSITIVITY; }
 		if (keys::a) { moveVector.x -= MOVE_SENSITIVITY; }
 		if (keys::s) { moveVector.z += MOVE_SENSITIVITY; }
@@ -250,15 +198,13 @@ void graphicsLoop() {
 
 		if (!renderer.loadCameraPos(&camera.pos)) { debuglogger::out << debuglogger::error << "failed to load new camera position" << debuglogger::endl; EXIT_FROM_THREAD; }
 		cameraRotMat = Matrix4f::createRotationMat(camera.rot);
-		if (!renderer.loadCameraRotMat(&cameraRotMat)) { debuglogger::out << debuglogger::error << "failed to load new camera rotation" << debuglogger::endl; EXIT_FROM_THREAD; }
+		if (!renderer.loadCameraRotMat(&cameraRotMat)) { debuglogger::out << debuglogger::error << "failed to load new camera rotation" << debuglogger::endl; EXIT_FROM_THREAD; }*/
 	}
 
 	releaseAndReturn:
-		if (!DeleteDC(g)) { debuglogger::out << debuglogger::error << "failed to delete memory DC (g)" << debuglogger::endl; }
-		delete[] outputFrame;
-		if (!DeleteObject(bmp)) { debuglogger::out << debuglogger::error << "failed to delete bmp" << debuglogger::endl; }	// This needs to be deleted after it is no longer selected by any DC.
-		if (!ReleaseDC(hWnd, finalG)) { debuglogger::out << debuglogger::error << "failed to release window DC (finalG)" << debuglogger::endl; }
-		renderer.release();
+		if (!DeleteDC(g)) { debuglogger::out << debuglogger::error << "failed to delete memory DC (g)\n"; }
+		if (!DeleteObject(bmp)) { debuglogger::out << debuglogger::error << "failed to delete bmp\n"; }	// This needs to be deleted after it is no longer selected by any DC.
+		if (!ReleaseDC(hWnd, finalG)) { debuglogger::out << debuglogger::error << "failed to release window DC (finalG)\n"; }
 
 		// TODO: If this were perfect, this thread would exit with EXIT_FAILURE as well as the main thread if something bad happened, it doesn't yet.
 }
