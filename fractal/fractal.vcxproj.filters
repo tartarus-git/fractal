@@ -92,5 +92,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="raytracer.cl" />
+    <None Include="averager.cl" />
   </ItemGroup>
 </Project>

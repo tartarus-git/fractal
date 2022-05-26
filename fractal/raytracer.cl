@@ -6,6 +6,7 @@ typedef struct Entity {
     float3 position;
     float3 rotation;
     float3 scale;
+    uint type;
     uint material;
 } Entity;
 
@@ -59,18 +60,18 @@ float3 rotateVector(float3 vec, float3 rot) {
     float y = vec.y;
     float z = vec.z;
 
-	float cosine = cos(rot.y);
-	float sine = sin(rot.y);
+	float cosine = native_cos(rot.y);
+	float sine = native_sin(rot.y);
 	result.y = cosine * y - sine * z;
 	result.z = sine * y + cosine * z;
 
-	cosine = cos(rot.x);
-	sine = sin(rot.x);
+	cosine = native_cos(rot.x);
+	sine = native_sin(rot.x);
 	result.x = cosine * x - sine * result.z;
 	result.z = sine * x + cosine * result.z;
 
-	cosine = cos(rot.z);
-	sine = sin(rot.z);
+	cosine = native_cos(rot.z);
+	sine = native_sin(rot.z);
 	float cachedX = result.x;
 	result.x = cosine * result.x - sine * result.y;
 	result.y = sine * cachedX + cosine * result.y;
@@ -78,14 +79,19 @@ float3 rotateVector(float3 vec, float3 rot) {
 	return result;
 }
 
+typedef struct Light {
+    float3 position;
+    float3 color;
+} Light;
+
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, float3 cameraPos, float3 cameraRotation, float cameraFOV, 
-                        __global Entity* scene, ulong sceneLength, __global Material* materialHeap, ulong materialHeapLength, 
+                        __global Entity* scene, ulong sceneLength, __global Light* lightHeap, ulong lightHeapLength, __global Material* materialHeap, ulong materialHeapLength, 
                         ulong materialHeapOffset) {
     int x = get_global_id(0);
     if (x >= frameWidth) { return; }
     int2 coords = (int2)(x, get_global_id(1));
 
-    float3 rayOrigin = (float3)(0, 0, frameHeight / 2.0f / tan(cameraFOV / 2.0f / 180 * 3.14159f));
+    float3 rayOrigin = (float3)(0, 0, frameHeight / 2.0f / native_tan(cameraFOV / 2.0f / 180 * 3.14159f));
 
     float3 ray = (float3)(coords.x - (int)frameWidth / 2, -coords.y + (int)frameHeight / 2, 0) - rayOrigin;
     ray = normalize(ray);
@@ -95,7 +101,7 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
     float3 colorCollector = (float3)(0, 0, 0);
 
 int lastCollidedWithObject = 100;
-for (int j = 0; j < 400; j++) {
+for (int j = 0; j < 10; j++) {
     float3 closestPoint = (float3)(1000, 10000, 10000);
     int closestIndex = 0;
     bool noHits = true;
@@ -115,13 +121,24 @@ for (int j = 0; j < 400; j++) {
     if (!noHits) {
 
             lastCollidedWithObject = closestIndex;
-            if (closestIndex != 2) { 
+            if (closestIndex & 1) { 
                 
             float3 normal = normalize(closestPoint - scene[closestIndex].position);
+            bool free = true;
+            for (int k = 0; k < sceneLength; k++) {
+                if (k == closestIndex) { continue; }
+                bool thing;
+                intersectWithSphere(closestPoint, (float3)(0, 1, 0), scene[k].position, scene[k].scale.x, &thing);
+                if (thing) { free = false; break; }
+            }
+            if (free) {
             float multiplier = fmax(dot(normal, (float3)(0, 1, 0)), 0);
             //float multiplier = 1;
             float3 color = (float3)(multiplier, multiplier, multiplier);
             colorCollector += color;
+            } else {
+                // nothing.
+            }
             break;
              }
 
@@ -134,7 +151,7 @@ for (int j = 0; j < 400; j++) {
             cameraPos = closestPoint;
             float dotval = dot(ray, normal);
             ray -= 2 * dotval * normal;
-            colorCollector.z += 0.5f;
+            //colorCollector.z += 0.5f;
 
         continue; }
         else {

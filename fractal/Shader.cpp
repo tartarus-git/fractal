@@ -28,3 +28,9 @@ ErrorCode Shader::setupFromFile(cl_context computeContext, cl_device_id computeD
 	case CL_EXT_GET_KERNEL_WORK_GROUP_INFO_FAILED: return ErrorCode::SHADER_GET_KERNEL_WORK_GROUP_INFO_FAILED;
 	}
 }
+
+bool Shader::releaseBaseVars() {
+	if (clReleaseKernel(computeKernel) != CL_SUCCESS) { clReleaseProgram(computeProgram); return false; }
+	if (clReleaseProgram(computeProgram) != CL_SUCCESS) { return false; }
+	return true;
+}

@@ -137,20 +137,32 @@ void graphicsLoop() {
 
 
 	DefaultShader mainShader;
-	ErrorCode err = Renderer::init(&mainShader, windowWidth, windowHeight);
+	ErrorCode err = Renderer::init(&mainShader, 2, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
+	debuglogger::out << (int16_t)err << '\n';
 	Camera camera({ 0, 0, 0 }, { 0, 0, 0 }, 90);
 	Renderer::loadCamera(camera);
 	Renderer::transferCameraPosition();
 	Renderer::transferCameraRotation();
 	Renderer::transferCameraFOV();
 
-	Entity entities[] = { { { 0, -505, -20 }, { 0, 0, 0 }, { 500, 0, 0 } },
-	 { { 0, 505, -20 }, { 0, 0, 0 }, { 500, 0, 0 } },
-		{ { 0, 0, -20 }, { 0, 0, 0 }, { 5, 0, 0 } } };
-	Renderer::loadScene(Scene(entities, 3));
+	Scene mainScene(100, 5);
+	for (int i = 0; i < 100; i++) {
+		Entity entity;
+		entity.position = nmath::Vector3f(rand() % 1000, 0, rand() % 1000);
+		entity.scale = nmath::Vector3f(10, 0, 0);
+		mainScene.entityHeap[i] = entity;
+	}
+	for (int i = 0; i < 5; i++) {
+		Light light;
+		light.position = nmath::Vector3f(rand() % 100, 0, rand() % 100);
+		light.color = nmath::Vector3f(1, 1, 1);
+		mainScene.lightHeap[i] = light;
+	}
+	mainScene.entityHeap[1].position = nmath::Vector3f(500, -1000, 500);
+	mainScene.entityHeap[1].scale = nmath::Vector3f(1000, 0, 0);
+	Renderer::loadScene(std::move(mainScene));
 
-	Material materials[] = { { { 1, 1, 1 } } };
-	ResourceHeap resources(materials, 0, 1);
+	ResourceHeap resources(0, 1);
 	Renderer::loadResources(std::move(resources));
 
 	err = Renderer::transferResources();

@@ -12,23 +12,24 @@ public:
 	Entity* entityHeap;
 	size_t entityHeapLength;
 
-	Light* lights;
-	uint64_t lightsLength;
+	Light* lightHeap;
+	uint64_t lightHeapLength;
 
 	constexpr Scene() = default;
-	constexpr Scene(size_t entityHeapLength, uint64_t lightsLength) : entityHeapLength(entityHeapLength), lightsLength(lightsLength) {
+	constexpr Scene(size_t entityHeapLength, uint64_t lightHeapLength) : entityHeapLength(entityHeapLength), lightHeapLength(lightHeapLength) {
 		entityHeap = new (std::nothrow) Entity[entityHeapLength];
-		lights = new (std::nothrow) Entity[lightsLength];
+		lightHeap = new (std::nothrow) Light[lightHeapLength];
 	}
 
 	constexpr Scene& operator=(Scene&& right) {
 		entityHeap = right.entityHeap;
 		right.entityHeap = nullptr;
-		lights = right.lights;
-		right.lights = nullptr;
+		lightHeap = right.lightHeap;
+		right.lightHeap = nullptr;
 		entityHeapLength = right.entityHeapLength;
+		lightHeapLength = right.lightHeapLength;
 		return *this;
 	}
 
-	constexpr ~Scene() { delete[] entityHeap; delete[] lights; }
+	constexpr ~Scene() { delete[] entityHeap; delete[] lightHeap; }
 };

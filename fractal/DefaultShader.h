@@ -1,13 +1,14 @@
 #pragma once
 
 #include "Shader.h"
+#include "RaytracingShader.h"
 
 #include "cl_bindings_and_helpers.h"
 #include <string>
 
 #include "logging/debugOutput.h"
 
-class DefaultShader : public Shader
+class DefaultShader : public RaytracingShader
 {
 	ErrorCode init(cl_context context, cl_device_id device) override {
 		std::string buildLog;
@@ -16,6 +17,10 @@ class DefaultShader : public Shader
 			debuglogger::out << buildLog << '\n';
 		}
 		return err;
+	}
+
+	bool release() override {
+		return releaseBaseVars();
 	}
 
 public:
@@ -43,21 +48,26 @@ public:
 		clSetKernelArg(computeKernel, 4, sizeof(nmath::Vector3f), &rotation);
 	}
 
-	void setCameraFOV(float FOV) override {
+	void setCameraFOV(float FOV) override {			// TODO: Find a way to put rayOrigin in somewhere.
 		clSetKernelArg(computeKernel, 5, sizeof(nmath::Vector3f), &FOV);
 	}
 
-	void setScene(cl_mem computeScene, uint64_t computeSceneLength) override {
-		clSetKernelArg(computeKernel, 6, sizeof(cl_mem), &computeScene);
-		clSetKernelArg(computeKernel, 7, sizeof(uint64_t), &computeSceneLength);
+	void setEntityHeap(cl_mem computeEntityHeap, uint64_t computeEntityHeapLength) override {
+		clSetKernelArg(computeKernel, 6, sizeof(cl_mem), &computeEntityHeap);
+		clSetKernelArg(computeKernel, 7, sizeof(uint64_t), &computeEntityHeapLength);
+	}
+
+	void setLightHeap(cl_mem computeLightHeap, uint64_t computeLightHeapLength) override {
+		clSetKernelArg(computeKernel, 8, sizeof(cl_mem), &computeLightHeap);
+		clSetKernelArg(computeKernel, 9, sizeof(uint64_t), &computeLightHeapLength);
 	}
 
 	void setMaterialHeap(cl_mem computeMaterialHeap, uint64_t computeMaterialHeapLength) override {
-		clSetKernelArg(computeKernel, 8, sizeof(cl_mem), &computeMaterialHeap);
-		clSetKernelArg(computeKernel, 9, sizeof(uint64_t), &computeMaterialHeapLength);
+		clSetKernelArg(computeKernel, 10, sizeof(cl_mem), &computeMaterialHeap);
+		clSetKernelArg(computeKernel, 11, sizeof(uint64_t), &computeMaterialHeapLength);
 	}
 
 	void setMaterialHeapOffset(uint64_t computeMaterialHeapOffset) override {
-		clSetKernelArg(computeKernel, 10, sizeof(uint64_t), &computeMaterialHeapOffset);
+		clSetKernelArg(computeKernel, 12, sizeof(uint64_t), &computeMaterialHeapOffset);
 	}
 };
