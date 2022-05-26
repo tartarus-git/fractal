@@ -6,6 +6,7 @@ typedef struct Entity {
     float3 position;
     float3 rotation;
     float3 scale;
+    uint material;
 } Entity;
 
 inline float intersectLineSphere(float3 origin, float3 ray, float3 spherePos, float sphereRadius) {
@@ -114,7 +115,7 @@ for (int j = 0; j < 400; j++) {
     if (!noHits) {
 
             lastCollidedWithObject = closestIndex;
-            if (closestIndex == 2) { 
+            if (closestIndex != 2) { 
                 
             float3 normal = normalize(closestPoint - scene[closestIndex].position);
             float multiplier = fmax(dot(normal, (float3)(0, 1, 0)), 0);

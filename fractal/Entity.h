@@ -4,9 +4,14 @@
 
 #include "cl_bindings_and_helpers.h"
 
+enum class EntityType {
+	SPHERE
+};
+
 struct Entity {
-	nmath::Vector4f position;
-	nmath::Vector4f rotation;
-	nmath::Vector4f scale;
-	//cl_uint material;
+	nmath::Vector3f position;
+	alignas(16) nmath::Vector3f rotation;
+	alignas(16) nmath::Vector3f scale;
+	alignas(16) cl_uint type;
+	cl_uint material;
 };

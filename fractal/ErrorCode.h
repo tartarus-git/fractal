@@ -4,7 +4,7 @@
 
 struct ErrorCode {
 public:
-	enum {
+	enum {													// TODO: Obviously, once your finished with the dev, order these error codes and make sure you don't have any unnecessary ones in there.
 		SUCCESS,
 		FRAME_INIT_FAILED_INSUFFICIENT_HOST_MEM,
 		FRAME_FALLBACK_REALLOCATION_FAILED,

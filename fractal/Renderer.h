@@ -13,9 +13,17 @@
 
 #include <cstdint>
 
+enum class ImageChannelOrderType {
+	RGBA,
+	BGRA,
+	ARGB,
+	RGB
+};
+
 class Renderer
 {
-	static const cl_image_format frameFormat;																// NOTE: Can't just be const, needs to be static const even though that shouldn't really make a difference. Probably enforced just to make you be explicit.
+	static cl_image_format frameFormat;																// NOTE: Can't just be const, needs to be static const even though that shouldn't really make a difference. Probably enforced just to make you be explicit.
+	static unsigned char frameBPP;
 
 	static size_t computeMaterialHeapOffset;
 
@@ -52,7 +60,7 @@ public:
 
 	static Shader* shader;
 
-	static ErrorCode init(Shader* shader, uint32_t frameWidth, uint32_t frameHeight);
+	static ErrorCode init(Shader* shader, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder);
 
 	static ErrorCode resizeFrame(uint32_t newFrameWidth, uint32_t newFrameHeight);							// SIDE-NOTE: class members are implicitly inline. Also, the static modifier doesn't mess with the linkage, it just changes the access pattern (induces classic static behaviour) when used on members.
 

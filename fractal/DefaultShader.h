@@ -8,9 +8,7 @@
 #include "logging/debugOutput.h"
 
 class DefaultShader : public Shader
-{				// TODO: Make init invisible to user by handling it through friend stuff.
-public:
-	// TODO: Find out diff between override virtual and nothng and write it down in a NOTE.
+{
 	ErrorCode init(cl_context context, cl_device_id device) override {
 		std::string buildLog;
 		ErrorCode err = setupFromFile(context, device, "raytracer.cl", "traceRays", buildLog);
@@ -19,6 +17,17 @@ public:
 		}
 		return err;
 	}
+
+public:
+
+	// SIDE-NOTE: Difference between nothing, virtual and override while inheriting from virtual classes:
+	// You can override virtual functions just fine without writing virtual or override, they are both kind of just syntactic sugar.
+	// Virtual is possible in case the user wants to denote that this has something to do with a virtual function. The downside with virtual is that you don't know if it's overriding a virtual function or creating a new virtual function.
+	// It also means that if you have an error somewhere in the function name or parameters, it won't throw any error, it just won't override and will instead create a new virtual function, since it has a new signature that hasn't been encountered before but also has the virtual tag.
+	// Similar situation also arises when you don't use any tags, if the function doesn't exists, it'll just create a new one without saying anything to you.
+	// The no-tag situation I can understand, but why they decided to allow you to use virtual in the case where your overriding I have no idea.
+	// Override tag is the best one out of the three possibilities: It throws an error if the function in question isn't overriding anything, forcing you to override something and removing potential bugs. Definitely use override tag.
+	// (You can also use virtual and the override tag, which has all the advantages of override plus the syntactic sugar of the virtual keyword, but I don't like that).
 
 	void setFrameData(cl_mem computeFrame, cl_uint frameWidth, cl_uint frameHeight) override {
 		clSetKernelArg(computeKernel, 0, sizeof(cl_mem), &computeFrame);

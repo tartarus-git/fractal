@@ -6,9 +6,10 @@
 
 // TODO: At end of dev, check how resilient to stupid programming and usage this class is. Like how much does it fall apart when you screw with the mem variables willy nilly.
 
-const cl_image_format Renderer::frameFormat = { CL_RGBA, CL_UNSIGNED_INT8 };			// TODO: Think about removing A from image format or letting user decide based on system requirements.
+cl_image_format Renderer::frameFormat;
+unsigned char Renderer::frameBPP;
 
-size_t Renderer::computeMaterialHeapOffset = -1;
+size_t Renderer::computeMaterialHeapOffset = 0;
 
 size_t Renderer::computeGlobalSize[2];
 size_t Renderer::computeLocalSize[2];
@@ -39,7 +40,7 @@ Camera Renderer::camera;
 Shader* Renderer::shader;
 
 bool Renderer::initFrame(uint32_t frameWidth, uint32_t frameHeight) {
-	frame = new (std::nothrow) char[frameWidth * 4 * frameHeight];
+	frame = new (std::nothrow) char[frameWidth * frameBPP * frameHeight];
 	if (!frame) { return false; }
 	Renderer::frameWidth = frameWidth;
 	Renderer::frameHeight = frameHeight;
@@ -58,7 +59,7 @@ bool Renderer::allocateFrameOnDevice() {
 	return true;
 }
 
-ErrorCode Renderer::init(Shader* shader, uint32_t frameWidth, uint32_t frameHeight) {
+ErrorCode Renderer::init(Shader* shader, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder) {
 	if (!initFrame(frameWidth, frameHeight)) { return ErrorCode::FRAME_INIT_FAILED_INSUFFICIENT_HOST_MEM; }
 
 	switch (initOpenCLBindings()) {
@@ -100,6 +101,14 @@ ErrorCode Renderer::init(Shader* shader, uint32_t frameWidth, uint32_t frameHeig
 		return ErrorCode::DEVICE_FRAME_ALLOCATION_FAILED;
 	}
 
+	switch (frameChannelOrder) {
+	case ImageChannelOrderType::RGBA: frameFormat.image_channel_order = CL_RGBA; frameBPP = 4; break;
+	case ImageChannelOrderType::BGRA: frameFormat.image_channel_order = CL_BGRA; frameBPP = 4; break;
+	case ImageChannelOrderType::ARGB: frameFormat.image_channel_order = CL_ARGB; frameBPP = 4; break;
+	case ImageChannelOrderType::RGB: frameFormat.image_channel_order = CL_RGB; frameBPP = 3; break;
+	}
+	frameFormat.image_channel_data_type = CL_UNSIGNED_INT8;
+
 	return ErrorCode::SUCCESS;
 }
 
@@ -108,7 +117,7 @@ ErrorCode Renderer::resizeFrame(uint32_t newFrameWidth, uint32_t newFrameHeight)
 	uint32_t oldFrameHeight = frameHeight;
 	delete[] frame;
 	if (!initFrame(newFrameWidth, newFrameHeight)) {
-		frame = new (std::nothrow) char[frameWidth * 4 * frameHeight];
+		frame = new (std::nothrow) char[frameWidth * frameBPP * frameHeight];
 		if (!frame) { return ErrorCode::FRAME_FALLBACK_REALLOCATION_FAILED; }
 		return ErrorCode::FRAME_RESIZE_FAILED_INSUFFICIENT_HOST_MEM;
 	}
@@ -117,12 +126,12 @@ ErrorCode Renderer::resizeFrame(uint32_t newFrameWidth, uint32_t newFrameHeight)
 		delete[] frame;
 		frameWidth = oldFrameWidth;
 		frameHeight = oldFrameHeight;
-		frame = new (std::nothrow) char[frameWidth * 4 * frameHeight];
+		frame = new (std::nothrow) char[frameWidth * frameBPP * frameHeight];
 		if (!frame) { return ErrorCode::FRAME_FALLBACK_REALLOCATION_FAILED; }
 		if (!allocateFrameOnDevice()) { computeFrameAllocated = false; return ErrorCode::FRAME_FALLBACK_DEVICE_REALLOCATION_FAILED; }
 		return ErrorCode::FRAME_RESIZE_FAILED_INSUFFICIENT_DEVICE_MEM;
 	}
-	return ErrorCode::SUCCESS;
+	return ErrorCode::SUCCESS;				// TODO: subsampling and lights as part of scene. Add heaps to scene for kd tree to reference.
 }
 
 void Renderer::loadResources(ResourceHeap&& resources) {

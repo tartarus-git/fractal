@@ -144,9 +144,9 @@ void graphicsLoop() {
 	Renderer::transferCameraRotation();
 	Renderer::transferCameraFOV();
 
-	Entity entities[] = { { { 0, -505, -20, 0 }, { 0, 0, 0, 0 }, { 500, 0, 0, 0 } },
-	 { { 0, 505, -20, 0 }, { 0, 0, 0, 0 }, { 500, 0, 0, 0 } },
-		{ { 0, 0, -20, 0 }, { 0, 0, 0, 0 }, { 5, 0, 0, 0 } } };
+	Entity entities[] = { { { 0, -505, -20 }, { 0, 0, 0 }, { 500, 0, 0 } },
+	 { { 0, 505, -20 }, { 0, 0, 0 }, { 500, 0, 0 } },
+		{ { 0, 0, -20 }, { 0, 0, 0 }, { 5, 0, 0 } } };
 	Renderer::loadScene(Scene(entities, 3));
 
 	Material materials[] = { { { 1, 1, 1 } } };
@@ -174,6 +174,9 @@ void graphicsLoop() {
 	while (isAlive) {
 
 		err = Renderer::render();
+		if (err != ErrorCode::SUCCESS) {
+			debuglogger::out << (int16_t)err << '\n';
+		}
 
 		if (!SetBitmapBits(bmp, outputFrame_size, Renderer::frame)) {			// TODO: Replace this copy (which is unnecessary), with a direct access to the bitmap bits.
 			debuglogger::out << debuglogger::error << "failed to set bmp bits\n";
@@ -195,6 +198,7 @@ void graphicsLoop() {
 			SelectObject(g, defaultBmp);			// Deselect our bmp by replacing it with the defaultBmp that we got from above.
 			DeleteObject(bmp);
 			bmp = CreateCompatibleBitmap(finalG, windowWidth, windowHeight);
+			outputFrame_size = windowWidth * windowHeight * 4;
 			SelectObject(g, bmp);
 
 			continue;
@@ -227,6 +231,8 @@ void graphicsLoop() {
 		if (!DeleteDC(g)) { debuglogger::out << debuglogger::error << "failed to delete memory DC (g)\n"; }
 		if (!DeleteObject(bmp)) { debuglogger::out << debuglogger::error << "failed to delete bmp\n"; }	// This needs to be deleted after it is no longer selected by any DC.
 		if (!ReleaseDC(hWnd, finalG)) { debuglogger::out << debuglogger::error << "failed to release window DC (finalG)\n"; }
+
+		Renderer::release();
 
 		// TODO: If this were perfect, this thread would exit with EXIT_FAILURE as well as the main thread if something bad happened, it doesn't yet.
 }

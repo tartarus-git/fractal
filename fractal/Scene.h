@@ -2,22 +2,33 @@
 
 #include "Entity.h"
 
+#include "Light.h"
+
+#include <new>
 #include <cstdint>
 
 class Scene {
 public:
-	Entity* entities;
-	size_t length;
+	Entity* entityHeap;
+	size_t entityHeapLength;
+
+	Light* lights;
+	uint64_t lightsLength;
 
 	constexpr Scene() = default;
-	constexpr Scene(Entity* entities, size_t length) : entities(entities), length(length) { }
+	constexpr Scene(size_t entityHeapLength, uint64_t lightsLength) : entityHeapLength(entityHeapLength), lightsLength(lightsLength) {
+		entityHeap = new (std::nothrow) Entity[entityHeapLength];
+		lights = new (std::nothrow) Entity[lightsLength];
+	}
 
 	constexpr Scene& operator=(Scene&& right) {
-		entities = right.entities;
-		right.entities = nullptr;
-		length = right.length;
+		entityHeap = right.entityHeap;
+		right.entityHeap = nullptr;
+		lights = right.lights;
+		right.lights = nullptr;
+		entityHeapLength = right.entityHeapLength;
 		return *this;
 	}
 
-	constexpr ~Scene() { delete[] entities; }				// TODO: Make sure delete[] doesn't do anything for nullptr. It doesn't though, I'm pretty sure.
+	constexpr ~Scene() { delete[] entityHeap; delete[] lights; }
 };

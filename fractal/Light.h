@@ -2,6 +2,7 @@
 
 #include "nmath/vectors/Vector3f.h"
 
-struct Material {
+struct Light {
+	nmath::Vector3f position;
 	alignas(16) nmath::Vector3f color;
 };
