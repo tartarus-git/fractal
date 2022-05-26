@@ -9,7 +9,8 @@
 
 #include "cl_bindings_and_helpers.h"
 
-#include "Shader.h"
+#include "RaytracingShader.h"
+#include "AveragingShader.h"
 
 #include <cstdint>
 
@@ -32,7 +33,9 @@ class Renderer
 	static size_t computeFrameOrigin[3];
 	static size_t computeFrameRegion[3];
 
-	static bool initFrame(uint32_t frameWidth, uint32_t frameHeight);
+	static AveragingShader averagingShader;																					// NOTE: Since I never use AveragingShader's vtable for anything, I assume it gets optimized out, allowing this to be used without overhead.
+
+	static bool initFrames(uint16_t samplesPerPixel, uint32_t frameWidth, uint32_t frameHeight);
 
 	static bool allocateFrameOnDevice();
 
@@ -41,6 +44,12 @@ public:
 	static cl_device_id computeDevice;
 	static cl_context computeContext;
 	static cl_command_queue computeCommandQueue;
+
+	static char* beforeAverageFrame;
+	static uint32_t beforeAverageFrameWidth;
+	static uint32_t beforeAverageFrameHeight;
+	static cl_mem computeBeforeAverageFrame;
+	static bool computeBeforeAverageFrameAllocated;
 
 	static char* frame;
 	static uint32_t frameWidth;
@@ -58,9 +67,9 @@ public:
 
 	static Camera camera;
 
-	static Shader* shader;
+	static RaytracingShader* shader;
 
-	static ErrorCode init(Shader* shader, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder);
+	static ErrorCode init(Shader* shader, uint16_t samplesPerPixelSideLength, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder);
 
 	static ErrorCode resizeFrame(uint32_t newFrameWidth, uint32_t newFrameHeight);							// SIDE-NOTE: class members are implicitly inline. Also, the static modifier doesn't mess with the linkage, it just changes the access pattern (induces classic static behaviour) when used on members.
 

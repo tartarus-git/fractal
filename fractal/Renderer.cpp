@@ -21,6 +21,12 @@ cl_device_id Renderer::computeDevice;
 cl_context Renderer::computeContext;
 cl_command_queue Renderer::computeCommandQueue;
 
+char* Renderer::beforeAverageFrame;
+uint32_t Renderer::beforeAverageFrameWidth;
+uint32_t Renderer::beforeAverageFrameHeight;
+cl_mem Renderer::computeBeforeAverageFrame;
+bool Renderer::computeBeforeAverageFrameAllocated = false;
+
 char* Renderer::frame;
 uint32_t Renderer::frameWidth;
 uint32_t Renderer::frameHeight;
@@ -37,11 +43,15 @@ size_t Renderer::computeSceneLength = 0;
 
 Camera Renderer::camera;
 
-Shader* Renderer::shader;
+RaytracingShader* Renderer::shader;
 
-bool Renderer::initFrame(uint32_t frameWidth, uint32_t frameHeight) {
+bool Renderer::initFrames(uint16_t samplesPerPixelSideLength, uint32_t frameWidth, uint32_t frameHeight) {
+	beforeAverageFrameWidth = frameWidth * samplesPerPixelSideLength;
+	beforeAverageFrameHeight = frameHeight * samplesPerPixelSideLength;
+	beforeAverageFrame = new (std::nothrow) char[beforeAverageFrameWidth * frameBPP * beforeAverageFrameHeight];
+	if (!beforeAverageFrame) { return false; }
 	frame = new (std::nothrow) char[frameWidth * frameBPP * frameHeight];
-	if (!frame) { return false; }
+	if (!frame) { delete[] beforeAverageFrame; return false; }
 	Renderer::frameWidth = frameWidth;
 	Renderer::frameHeight = frameHeight;
 	return true;
@@ -53,37 +63,50 @@ bool Renderer::allocateFrameOnDevice() {
 	if (!computeFrame) { return false; }
 	shader->setFrameData(computeFrame, frameWidth, frameHeight);
 	computeGlobalSize[0] = frameWidth + (shader->computeKernelWorkGroupSize - (frameWidth % shader->computeKernelWorkGroupSize));
-	computeGlobalSize[1] = frameHeight;				// TODO: Having the same data twice hanging around the class is stupid, fix this somehow.
-	computeFrameRegion[0] = frameWidth;
-	computeFrameRegion[1] = frameHeight;
+	computeGlobalSize[1] = frameHeight;
+	computeFrameRegion[0] = frameWidth;											// NOTE: Having the frame size be expressed multiple times in the class sucks, but the alternative is to spend a little tiny bit of processing power building together these structs every render call,
+	computeFrameRegion[1] = frameHeight;										// NOTE: which I don't want to do. We could also define frameWidth and frameHeight as references to computeFrameRegion, but that would force me to use size_t, which I also don't want to do.
 	return true;
 }
 
-ErrorCode Renderer::init(Shader* shader, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder) {
-	if (!initFrame(frameWidth, frameHeight)) { return ErrorCode::FRAME_INIT_FAILED_INSUFFICIENT_HOST_MEM; }
+ErrorCode Renderer::init(Shader* shader, uint16_t samplesPerPixelSideLength, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder) {
+	if (!initFrames(samplesPerPixelSideLength, frameWidth, frameHeight)) { return ErrorCode::FRAME_INIT_FAILED_INSUFFICIENT_HOST_MEM; }
 
 	switch (initOpenCLBindings()) {
 	case CL_SUCCESS: break;
-	case CL_EXT_DLL_LOAD_FAILURE: delete[] frame; freeOpenCLLib(); return ErrorCode::OPENCL_DLL_LOAD_FAILED;
-	case CL_EXT_DLL_FUNC_BIND_FAILURE: delete[] frame; freeOpenCLLib(); return ErrorCode::OPENCL_DLL_FUNC_BIND_FAILED;
+	case CL_EXT_DLL_LOAD_FAILURE: delete[] beforeAverageFrame; delete[] frame; freeOpenCLLib(); return ErrorCode::OPENCL_DLL_LOAD_FAILED;
+	case CL_EXT_DLL_FUNC_BIND_FAILURE: delete[] beforeAverageFrame; delete[] frame; freeOpenCLLib(); return ErrorCode::OPENCL_DLL_FUNC_BIND_FAILED;
 	}
 
 	switch (initOpenCLVarsForBestDevice(VersionIdentifier(3, 0), computePlatform, computeDevice, computeContext, computeCommandQueue)) {
 	case CL_SUCCESS: break;
-	case CL_EXT_NO_PLATFORMS_FOUND: delete[] frame; freeOpenCLLib(); return ErrorCode::NO_ACCELERATION_PLATFORMS_FOUND;
-	case CL_EXT_INSUFFICIENT_HOST_MEM: delete[] frame; freeOpenCLLib(); return ErrorCode::DEVICE_DISCOVERY_FAILED_INSUFFICIENT_HOST_MEM;
-	case CL_EXT_NO_DEVICES_FOUND_ON_PLATFORM: delete[] frame; freeOpenCLLib(); return ErrorCode::EMPTY_ACCELERATION_PLATFORM_ENCOUNTERED;
-	case CL_EXT_NO_DEVICES_FOUND: delete[] frame; freeOpenCLLib(); return ErrorCode::NO_DEVICES_FOUND;
+	case CL_EXT_NO_PLATFORMS_FOUND: delete[] beforeAverageFrame; delete[] frame; freeOpenCLLib(); return ErrorCode::NO_ACCELERATION_PLATFORMS_FOUND;
+	case CL_EXT_INSUFFICIENT_HOST_MEM: delete[] beforeAverageFrame; delete[] frame; freeOpenCLLib(); return ErrorCode::DEVICE_DISCOVERY_FAILED_INSUFFICIENT_HOST_MEM;
+	case CL_EXT_NO_DEVICES_FOUND_ON_PLATFORM: delete[] beforeAverageFrame; delete[] frame; freeOpenCLLib(); return ErrorCode::EMPTY_ACCELERATION_PLATFORM_ENCOUNTERED;
+	case CL_EXT_NO_DEVICES_FOUND: delete[] beforeAverageFrame; delete[] frame; freeOpenCLLib(); return ErrorCode::NO_DEVICES_FOUND;
 	}
 
 	ErrorCode err = shader->init(computeContext, computeDevice);
 	if (err != ErrorCode::SUCCESS) {
 		clReleaseCommandQueue(computeCommandQueue);
 		clReleaseContext(computeContext);
+		delete[] beforeAverageFrame;
 		delete[] frame;
 		freeOpenCLLib();
 		return err;
 	}
+
+	err = averagingShader.init(computeContext, computeDevice);
+	if (err != ErrorCode::SUCCESS) {
+		shader->release();
+		clReleaseCommandQueue(computeCommandQueue);
+		clReleaseContext(computeContext);
+		delete[] beforeAverageFrame;
+		delete[] frame;
+		freeOpenCLLib();
+		return err;
+	}
+
 	computeLocalSize[0] = shader->computeKernelWorkGroupSize;
 	computeLocalSize[1] = 1;
 	computeFrameOrigin[0] = 0;
@@ -94,8 +117,11 @@ ErrorCode Renderer::init(Shader* shader, uint32_t frameWidth, uint32_t frameHeig
 	Renderer::shader = shader;
 
 	if (!allocateFrameOnDevice()) {
+		averagingShader.release();
+		shader->release();
 		clReleaseCommandQueue(computeCommandQueue);
 		clReleaseContext(computeContext);
+		delete[] beforeAverageFrame;
 		delete[] frame;
 		freeOpenCLLib();
 		return ErrorCode::DEVICE_FRAME_ALLOCATION_FAILED;
@@ -208,11 +234,14 @@ ErrorCode Renderer::render() {
 }
 
 bool Renderer::release() {
+	delete[] beforeAverageFrame;
 	delete[] frame;
 	bool successful = true;
 	if (computeSceneLength != 0 && clReleaseMemObject(computeScene) == CL_SUCCESS) { computeSceneLength = 0; } else { successful = false; }
 	if (computeMaterialHeapLength != 0 && clReleaseMemObject(computeMaterialHeap) == CL_SUCCESS) { computeMaterialHeapLength = 0; } else { successful = false; }
 	if (computeFrameAllocated && clReleaseMemObject(computeFrame) == CL_SUCCESS) { computeFrameAllocated = false; } else { successful = false; }
+	if (!averagingShader.release()) { successful = false; }
+	if (!shader->release()) { successful = false; }
 	if (clReleaseCommandQueue(computeCommandQueue) != CL_SUCCESS) { successful = false; }
 	if (clReleaseContext(computeContext) != CL_SUCCESS) { successful = false; }
 	if (!freeOpenCLLib()) { successful = false; }

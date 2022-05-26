@@ -156,6 +156,7 @@
     <ClCompile Include="Shader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AveragingShader.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="DefaultShader.h" />
     <ClInclude Include="deps\nmath\include\nmath\vectors\Vector3f.h" />
@@ -165,7 +166,9 @@
     <ClInclude Include="deps\window-setup\include\windowSetup.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="ErrorCode.h" />
+    <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
+    <ClInclude Include="RaytracingShader.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="ResourceHeap.h" />
     <ClInclude Include="Scene.h" />

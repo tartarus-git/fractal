@@ -29,10 +29,10 @@ public:
 	// Override tag is the best one out of the three possibilities: It throws an error if the function in question isn't overriding anything, forcing you to override something and removing potential bugs. Definitely use override tag.
 	// (You can also use virtual and the override tag, which has all the advantages of override plus the syntactic sugar of the virtual keyword, but I don't like that).
 
-	void setFrameData(cl_mem computeFrame, cl_uint frameWidth, cl_uint frameHeight) override {
-		clSetKernelArg(computeKernel, 0, sizeof(cl_mem), &computeFrame);
-		clSetKernelArg(computeKernel, 1, sizeof(cl_uint), &frameWidth);
-		clSetKernelArg(computeKernel, 2, sizeof(cl_uint), &frameHeight);
+	void setBeforeAverageFrameData(cl_mem computeBeforeAverageFrame, cl_uint beforeAverageFrameWidth, cl_uint beforeAverageFrameHeight) override {
+		clSetKernelArg(computeKernel, 0, sizeof(cl_mem), &computeBeforeAverageFrame);
+		clSetKernelArg(computeKernel, 1, sizeof(cl_uint), &beforeAverageFrameWidth);
+		clSetKernelArg(computeKernel, 2, sizeof(cl_uint), &beforeAverageFrameHeight);
 	}
 
 	void setCameraPosition(nmath::Vector3f position) override {
