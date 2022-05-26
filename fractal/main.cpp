@@ -138,7 +138,7 @@ void graphicsLoop() {
 
 	DefaultShader mainShader;
 	ErrorCode err = Renderer::init(&mainShader, windowWidth, windowHeight);
-	Camera camera({ 0, 0, 0 }, { 0, 0, 0 }, 130);
+	Camera camera({ 0, 0, 0 }, { 0, 0, 0 }, 90);
 	Renderer::loadCamera(camera);
 	Renderer::transferCameraPosition();
 	Renderer::transferCameraRotation();
@@ -174,7 +174,6 @@ void graphicsLoop() {
 	while (isAlive) {
 
 		err = Renderer::render();
-		debuglogger::out << (int16_t)err << '\n';
 
 		if (!SetBitmapBits(bmp, outputFrame_size, Renderer::frame)) {			// TODO: Replace this copy (which is unnecessary), with a direct access to the bitmap bits.
 			debuglogger::out << debuglogger::error << "failed to set bmp bits\n";
@@ -189,6 +188,9 @@ void graphicsLoop() {
 			windowResized = false;			// Doing this at beginning leaves space for size event handler to set it to true again while we're recallibrating, which minimizes the chance that the window gets stuck with a drawing surface that doesn't match it's size.
 			updateWindowSizeVars();			// NOTE: The chance that something goes wrong with the above is astronomically low and basically zero because size events get fired after resizing is done and user can't start and stop another size move fast enough to trip us up.
 
+			err = Renderer::resizeFrame(windowWidth, windowHeight);
+			debuglogger::out << (int16_t)err << '\n';
+
 			// Resize GDI stuff.
 			SelectObject(g, defaultBmp);			// Deselect our bmp by replacing it with the defaultBmp that we got from above.
 			DeleteObject(bmp);
@@ -199,21 +201,26 @@ void graphicsLoop() {
 		}
 
 		if (pendingMouseMove) {
+			Renderer::camera.rotation.x += mouseMoveX * LOOK_SENSITIVITY_X;
+			Renderer::camera.rotation.y -= mouseMoveY * LOOK_SENSITIVITY_Y;
 			pendingMouseMove = false;
 		}
 
-		/*Vector3f moveVector = { };
+		nmath::Vector3f moveVector = { };
 		if (keys::w) { moveVector.z -= MOVE_SENSITIVITY; }
 		if (keys::a) { moveVector.x -= MOVE_SENSITIVITY; }
 		if (keys::s) { moveVector.z += MOVE_SENSITIVITY; }
 		if (keys::d) { moveVector.x += MOVE_SENSITIVITY; }
 		if (keys::space) { moveVector.y += MOVE_SENSITIVITY; }
 		if (keys::ctrl) { moveVector.y -= MOVE_SENSITIVITY; }
-		camera.move(moveVector);			// TODO: Is there really a reason to use custom vector rotation code when you can just pipe the vec through cameraRotMat? Do that.
+		Renderer::camera.position += moveVector.rotate(Renderer::camera.rotation);
+		Renderer::transferCameraPosition();
+		Renderer::transferCameraRotation();
+		//camera.move(moveVector);			// TODO: Is there really a reason to use custom vector rotation code when you can just pipe the vec through cameraRotMat? Do that.
 
-		if (!renderer.loadCameraPos(&camera.pos)) { debuglogger::out << debuglogger::error << "failed to load new camera position" << debuglogger::endl; EXIT_FROM_THREAD; }
-		cameraRotMat = Matrix4f::createRotationMat(camera.rot);
-		if (!renderer.loadCameraRotMat(&cameraRotMat)) { debuglogger::out << debuglogger::error << "failed to load new camera rotation" << debuglogger::endl; EXIT_FROM_THREAD; }*/
+		//if (!renderer.loadCameraPos(&camera.pos)) { debuglogger::out << debuglogger::error << "failed to load new camera position" << debuglogger::endl; EXIT_FROM_THREAD; }
+		//cameraRotMat = Matrix4f::createRotationMat(camera.rot);
+		//if (!renderer.loadCameraRotMat(&cameraRotMat)) { debuglogger::out << debuglogger::error << "failed to load new camera rotation" << debuglogger::endl; EXIT_FROM_THREAD; }*/
 	}
 
 	releaseAndReturn:

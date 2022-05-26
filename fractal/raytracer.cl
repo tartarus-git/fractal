@@ -51,6 +51,32 @@ float3 intersectWithSphere(float3 rayOrigin, float3 ray, float3 spherePosition, 
     return (float3)(rayOrigin + ray * t);
 }
 
+float3 rotateVector(float3 vec, float3 rot) {
+	float3 result;
+
+    float x = vec.x;
+    float y = vec.y;
+    float z = vec.z;
+
+	float cosine = cos(rot.y);
+	float sine = sin(rot.y);
+	result.y = cosine * y - sine * z;
+	result.z = sine * y + cosine * z;
+
+	cosine = cos(rot.x);
+	sine = sin(rot.x);
+	result.x = cosine * x - sine * result.z;
+	result.z = sine * x + cosine * result.z;
+
+	cosine = cos(rot.z);
+	sine = sin(rot.z);
+	float cachedX = result.x;
+	result.x = cosine * result.x - sine * result.y;
+	result.y = sine * cachedX + cosine * result.y;
+
+	return result;
+}
+
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, float3 cameraPos, float3 cameraRotation, float cameraFOV, 
                         __global Entity* scene, ulong sceneLength, __global Material* materialHeap, ulong materialHeapLength, 
                         ulong materialHeapOffset) {
@@ -62,12 +88,13 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
     float3 ray = (float3)(coords.x - (int)frameWidth / 2, -coords.y + (int)frameHeight / 2, 0) - rayOrigin;
     ray = normalize(ray);
-
+    
+    ray = rotateVector(ray, cameraRotation);
 
     float3 colorCollector = (float3)(0, 0, 0);
 
 int lastCollidedWithObject = 100;
-for (int j = 0; j < 200; j++) {
+for (int j = 0; j < 400; j++) {
     float3 closestPoint = (float3)(1000, 10000, 10000);
     int closestIndex = 0;
     bool noHits = true;
@@ -106,7 +133,7 @@ for (int j = 0; j < 200; j++) {
             cameraPos = closestPoint;
             float dotval = dot(ray, normal);
             ray -= 2 * dotval * normal;
-            //colorCollector.z += 0.5f;
+            colorCollector.z += 0.5f;
 
         continue; }
         else {
