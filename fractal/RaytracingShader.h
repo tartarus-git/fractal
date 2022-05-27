@@ -8,7 +8,7 @@ public:
 
 	virtual void setCameraPosition(nmath::Vector3f position) = 0;
 	virtual void setCameraRotation(nmath::Vector3f rotation) = 0;
-	virtual void setCameraFOV(float FOV) = 0;
+	virtual void setRayOrigin(float rayOrigin) = 0;
 
 	virtual void setEntityHeap(cl_mem computeEntityHeap, uint64_t computeEntityHeapLength) = 0;
 	virtual void setLightHeap(cl_mem computeLightHeap, uint64_t computeLightHeapLength) = 0;

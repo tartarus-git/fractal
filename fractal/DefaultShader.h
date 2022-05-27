@@ -8,6 +8,8 @@
 
 #include "logging/debugOutput.h"
 
+#include "nmath/matrices/Matrix4f.h"
+
 class DefaultShader : public RaytracingShader
 {
 	ErrorCode init(cl_context context, cl_device_id device) override {
@@ -45,11 +47,12 @@ public:
 	}
 
 	void setCameraRotation(nmath::Vector3f rotation) override {
-		clSetKernelArg(computeKernel, 4, sizeof(nmath::Vector3f), &rotation);
+		nmath::Matrix4f rotationMatrix = nmath::Matrix4f::createRotation(rotation);
+		clSetKernelArg(computeKernel, 4, sizeof(nmath::Matrix4f), &rotationMatrix);
 	}
 
-	void setCameraFOV(float FOV) override {			// TODO: Find a way to put rayOrigin in somewhere.
-		clSetKernelArg(computeKernel, 5, sizeof(nmath::Vector3f), &FOV);
+	void setRayOrigin(float rayOrigin) override {
+		clSetKernelArg(computeKernel, 5, sizeof(float), &rayOrigin);
 	}
 
 	void setEntityHeap(cl_mem computeEntityHeap, uint64_t computeEntityHeapLength) override {

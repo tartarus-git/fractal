@@ -36,6 +36,9 @@
     <ClCompile Include="DefaultShader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="deps\nmath\src\Matrix4f.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="deps\window-setup\include\logging\debugOutput.h">
@@ -87,6 +90,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RaytracingShader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="deps\nmath\include\nmath\constants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="deps\nmath\include\nmath\matrices\Matrix4f.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

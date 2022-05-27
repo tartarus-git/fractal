@@ -219,6 +219,7 @@ void graphicsLoop() {
 		if (pendingMouseMove) {
 			Renderer::camera.rotation.x += mouseMoveX * LOOK_SENSITIVITY_X;
 			Renderer::camera.rotation.y -= mouseMoveY * LOOK_SENSITIVITY_Y;
+			Renderer::transferCameraRotation();
 			pendingMouseMove = false;
 		}
 
@@ -231,7 +232,6 @@ void graphicsLoop() {
 		if (keys::ctrl) { moveVector.y -= MOVE_SENSITIVITY; }
 		Renderer::camera.position += moveVector.rotate(Renderer::camera.rotation);
 		Renderer::transferCameraPosition();
-		Renderer::transferCameraRotation();
 		//camera.move(moveVector);			// TODO: Is there really a reason to use custom vector rotation code when you can just pipe the vec through cameraRotMat? Do that.
 
 		//if (!renderer.loadCameraPos(&camera.pos)) { debuglogger::out << debuglogger::error << "failed to load new camera position" << debuglogger::endl; EXIT_FROM_THREAD; }

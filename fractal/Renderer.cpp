@@ -2,6 +2,10 @@
 
 #include "ErrorCode.h"
 
+#include "nmath/constants.h"
+
+#include <cmath>
+
 #include <new>
 
 // TODO: At end of dev, check how resilient to stupid programming and usage this class is. Like how much does it fall apart when you screw with the mem variables willy nilly.
@@ -9,6 +13,8 @@
 cl_image_format Renderer::frameFormat;
 unsigned char Renderer::frameBPP;
 uint16_t Renderer::samplesPerPixelSideLength;
+
+float Renderer::baseRayOrigin = -1;
 
 size_t Renderer::computeMaterialHeapOffset = -1;
 
@@ -93,6 +99,10 @@ bool Renderer::allocateFrameBuffersOnDevice() {
 	computeFrameRegion[1] = frameHeight;										// NOTE: which I don't want to do. We could also define frameWidth and frameHeight as references to computeFrameRegion, but that would force me to use size_t, which I also don't want to do.
 
 	return true;
+}
+
+void Renderer::transferRayOrigin() {
+	raytracingShader->setRayOrigin((beforeAverageFrameWidth > beforeAverageFrameHeight ? beforeAverageFrameHeight : beforeAverageFrameWidth) * baseRayOrigin);
 }
 
 ErrorCode Renderer::init(RaytracingShader* raytracingShader, uint16_t samplesPerPixelSideLength, uint32_t frameWidth, uint32_t frameHeight, ImageChannelOrderType frameChannelOrder) {
@@ -250,6 +260,9 @@ ErrorCode Renderer::resizeFrame(uint32_t newFrameWidth, uint32_t newFrameHeight)
 
 		return ErrorCode::DEVICE_REALLOCATE_FRAME_FAILED_INSUFFICIENT_DEVICE_MEM;
 	}
+
+	if (baseRayOrigin != -1) { transferRayOrigin(); }
+
 	return ErrorCode::SUCCESS;
 }
 
@@ -320,29 +333,42 @@ ErrorCode Renderer::transferScene() {
 void Renderer::loadCamera(const Camera& camera) { Renderer::camera = camera; }
 void Renderer::transferCameraPosition() { raytracingShader->setCameraPosition(camera.position); }
 void Renderer::transferCameraRotation() { raytracingShader->setCameraRotation(camera.rotation); }
-void Renderer::transferCameraFOV() { raytracingShader->setCameraFOV(camera.FOV); }
+void Renderer::transferCameraFOV() {
+	baseRayOrigin = 0.5f / tanf(camera.FOV / 360 * nmath::constants::pi);
+	transferRayOrigin();
+}
 
 ErrorCode Renderer::render() {
 	switch(clEnqueueNDRangeKernel(computeCommandQueue, raytracingShader->computeKernel, 2, nullptr, computeBeforeAverageFrameGlobalSize, computeBeforeAverageFrameLocalSize, 0, nullptr, nullptr)) {
 	case CL_SUCCESS: break;
-	case CL_INVALID_KERNEL_ARGS: return ErrorCode::DEVICE_RENDER_FAILED_KERNEL_ARGS_UNSPECIFIED;
-	case CL_OUT_OF_RESOURCES: return ErrorCode::DEVICE_RENDER_FAILED_INSUFFICIENT_MEM;
-	default: return ErrorCode::DEVICE_RENDER_FAILED;
+	case CL_INVALID_KERNEL_ARGS: return ErrorCode::DEVICE_ENQUEUE_RENDER_FAILED_KERNEL_ARGS_UNSPECIFIED;
+	case CL_OUT_OF_RESOURCES: return ErrorCode::DEVICE_ENQUEUE_RENDER_FAILED_INSUFFICIENT_MEM;
+	default: return ErrorCode::DEVICE_ENQUEUE_RENDER_FAILED;
 	}
+
+	//if (clFlush(computeCommandQueue) != CL_SUCCESS) {							// TODO: Put this in at a higher load and see if it really makes things faster.
+	//	debuglogger::out << "bruh\n";
+	//}
 
 	switch(clEnqueueNDRangeKernel(computeCommandQueue, averagingShader.computeKernel, 2, nullptr, computeFrameGlobalSize, computeFrameLocalSize, 0, nullptr, nullptr)) {
 	case CL_SUCCESS: break;
-	case CL_INVALID_KERNEL_ARGS: return ErrorCode::DEVICE_AVERAGE_FAILED_KERNEL_ARGS_UNSPECIFIED;					// TODO: Should I put some clFinish's before these returns?
-	case CL_OUT_OF_RESOURCES: return ErrorCode::DEVICE_AVERAGE_FAILED_INSUFFICIENT_MEM;
-	default: return ErrorCode::DEVICE_AVERAGE_FAILED;
+	case CL_INVALID_KERNEL_ARGS: clFinish(computeCommandQueue); return ErrorCode::DEVICE_ENQUEUE_AVERAGE_FAILED_KERNEL_ARGS_UNSPECIFIED;
+	case CL_OUT_OF_RESOURCES: clFinish(computeCommandQueue); return ErrorCode::DEVICE_ENQUEUE_AVERAGE_FAILED_INSUFFICIENT_MEM;
+	default: clFinish(computeCommandQueue); return ErrorCode::DEVICE_ENQUEUE_AVERAGE_FAILED;
 	}
 
-	if (clFinish(computeCommandQueue) != CL_SUCCESS) {						// TODO: I think this isn't necessary.
-		return ErrorCode::DEVICE_WAIT_FOR_RENDER_AND_AVERAGE_FAILED;
-	}
+	// NOTE: Enqueueing something on the command queue doesn't actually execute it, you have to do a clFlush to start executing the command queue.
+	// NOTE: Then you can do a clFinish to wait for the command queue to finish and then you can get the data back.
+	// NOTE: clFinish is garanteed to return only after all items on command queue have returned, which means that it must also contain a clFlush (by definition).
+	// NOTE: That means you can do all this with just a single call to clFinish if you want.
+	// NOTE: Separating it into clFlush and clFinish can give you better performance though, in case you want to do some CPU processing while the kernel is
+	// NOTE: executing to save time.
+
+	// NOTE: The following blocking clEnqueueReadImage takes care of flushing and finishing the command queue for us, so no need to handle that explicitly in this case.
+
 	cl_int err;
 	if ((err = clEnqueueReadImage(computeCommandQueue, computeFrame, true, computeFrameOrigin, computeFrameRegion, 0, 0, frame, 0, nullptr, nullptr)) != CL_SUCCESS) {
-		return ErrorCode::READ_DEVICE_FRAME_FAILED;
+		return clFinish(computeCommandQueue); ErrorCode::READ_DEVICE_FRAME_FAILED;
 	}
 	return ErrorCode::SUCCESS;
 }

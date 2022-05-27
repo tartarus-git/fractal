@@ -27,6 +27,8 @@ class Renderer
 	static unsigned char frameBPP;
 	static uint16_t samplesPerPixelSideLength;
 
+	static float baseRayOrigin;
+
 	static size_t computeMaterialHeapOffset;
 
 	static size_t computeFrameOrigin[3];
@@ -45,6 +47,8 @@ class Renderer
 
 	static bool allocateBeforeAverageFrameBufferOnDevice();
 	static bool allocateFrameBuffersOnDevice();
+
+	static void transferRayOrigin();
 
 public:
 	static cl_platform_id computePlatform;
