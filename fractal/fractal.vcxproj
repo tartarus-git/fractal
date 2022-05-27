@@ -169,6 +169,7 @@
     <ClInclude Include="deps\window-setup\include\windowSetup.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="ErrorCode.h" />
+    <ClInclude Include="KDTree.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="RaytracingShader.h" />
