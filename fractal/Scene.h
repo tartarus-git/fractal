@@ -124,7 +124,8 @@ public:
 
 	// TODO: dimensions might need to be inside the thing to make dimension skipping possible where it is necessary (just the leaves AFAIK).
 
-	void doThisThingForEveryObjectInRange(auto thing) {
+	template <typename lambda>
+	void doThisThingForEveryObjectInRange(lambda thing) {
 		for (int i = xLimit; i < xLimit + xLimitRange; i++) {
 			if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { break; }
 			if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimit + yLimitRange]].position.y + entityHeap[yList[yLimit + yLimitRange]].scale.x) { break; }
@@ -132,7 +133,7 @@ public:
 			if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimit + zLimitRange]].position.z + entityHeap[zList[zLimit + zLimitRange]].scale.x) { break; }
 			if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x < entityHeap[xList[xLimit]].position.x - entityHeap[xList[xLimit]].scale.x) { break; }
 			if (entityHeap[xList[i]].position.x + entityHeap[xList[i]].scale.x > entityHeap[xList[xLimit + xLimitRange]].position.x + entityHeap[xList[xLimit + xLimitRange]].scale.x) { break; }
-			thing();
+			int hi = thing();
 		}
 	}
 
@@ -143,9 +144,10 @@ public:
 			kdTreeNodes.back().split = boxSize.x / 2;
 			kdTreeNodes.back().parentIndex = parentIndex;
 			kdTreeNodes.back().leaf = 0;
-			uint64_t amount = 0;
-			uint64_t leftAmount = doThisThingForEveryObjectInRange([&amount]() { amount++; });
-			uint64_t rightAmount = getAmountOfEntitiesInXRange(boxPos.x + kdTreeNodes.back().split, kdTreeNodes.back().split);
+			uint64_t leftAmount = 0;
+			doThisThingForEveryObjectInRange([&amount = leftAmount]() { amount++; });
+			uint64_t rightAmount = 0;
+			doThisThingForEveryObjectInRange([&amount = rightAmount]() { amount++; });
 			if (leftAmount == rightAmount) {				// We're at a leaf.
 				kdTreeNodes.back().childrenIndex = leafObjectHeap.size();
 				kdTreeNodes.back().leaf = rightAmount;
