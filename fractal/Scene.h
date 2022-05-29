@@ -113,19 +113,13 @@ public:
 
 	std::vector<uint64_t> leafObjectHeap;
 
-	uint64_t xLimit;
-	uint64_t xLimitRange;
-
-	uint64_t yLimit;
-	uint64_t yLimitRange;
-
-	uint64_t zLimit;
-	uint64_t zLimitRange;
+	uint64_t limitBegins[3];			// For x, y, z dimensions.
+	uint64_t limitEnds[3];
 
 	// TODO: dimensions might need to be inside the thing to make dimension skipping possible where it is necessary (just the leaves AFAIK).
 
-	template <typename lambda>
-	void doThisThingForEveryObjectInRange(lambda thing) {
+	template <typename Lambda>
+	void doThisThingForEveryObjectInRange(Lambda thing) {
 		for (int i = xLimit; i < xLimit + xLimitRange; i++) {
 			if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { break; }
 			if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimit + yLimitRange]].position.y + entityHeap[yList[yLimit + yLimitRange]].scale.x) { break; }
@@ -133,7 +127,14 @@ public:
 			if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimit + zLimitRange]].position.z + entityHeap[zList[zLimit + zLimitRange]].scale.x) { break; }
 			if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x < entityHeap[xList[xLimit]].position.x - entityHeap[xList[xLimit]].scale.x) { break; }
 			if (entityHeap[xList[i]].position.x + entityHeap[xList[i]].scale.x > entityHeap[xList[xLimit + xLimitRange]].position.x + entityHeap[xList[xLimit + xLimitRange]].scale.x) { break; }
-			int hi = thing();
+			thing(xList[i]);
+		}
+	}
+
+	void cutAtSplice(float splice, char dimension) {
+		for (uint64_t i = limitBegins[dimension]; i < limitEnds[dimension]; i++) {
+			if (entityHeap[list[i * 3 + dimension]].position[dimension] + radius >= splice) { limitBegins[dimension] = list[i * 3 + dimension]; return; }
+			// TODO: only does the left new partition. The right partition gets forgotten. Fix that.
 		}
 	}
 
@@ -145,22 +146,13 @@ public:
 			kdTreeNodes.back().parentIndex = parentIndex;
 			kdTreeNodes.back().leaf = 0;
 			uint64_t leftAmount = 0;
-			doThisThingForEveryObjectInRange([&amount = leftAmount]() { amount++; });
+			doThisThingForEveryObjectInRange([&amount = leftAmount](uint64_t i) { amount++; });
 			uint64_t rightAmount = 0;
-			doThisThingForEveryObjectInRange([&amount = rightAmount]() { amount++; });
+			doThisThingForEveryObjectInRange([&amount = rightAmount](uint64_t i) { amount++; });
 			if (leftAmount == rightAmount) {				// We're at a leaf.
 				kdTreeNodes.back().childrenIndex = leafObjectHeap.size();
 				kdTreeNodes.back().leaf = rightAmount;
-				for (int i = xLimit; i < xLimit + xLimitRange; i++) {
-					if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { break; }
-					if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimit]].position.y + entityHeap[yList[yLimit]].scale.x) { break; }
-					if (entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z - entityHeap[zList[zLimit]].scale.x) { break; }
-					if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimit]].position.z + entityHeap[zList[zLimit]].scale.x) { break; }
-
-					if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x > boxPos.x && entityHeap[xList[i]].position.x + entityHeap[xList[i]].scale.x < boxPos.x + boxSize.x) {
-						leafObjectHeap.push_back(xList[i]);
-					}
-				}
+				doThisThingForEveryObjectInRange([&](uint64_t i) { leafObjectHeap.push_back(i); });
 				return;
 			}
 			generateKDTreeNode(kdTreeNodes.size() - 1, nmath::Vector3f(boxPos.x + kdTreeNodes.back().split, boxPos.y, boxPos.z), nmath::Vector3f(boxSize.x / 2, boxSize.y, boxSize.z), (dimension + 1) % 3);
