@@ -54,6 +54,8 @@ size_t Renderer::computeMaterialHeapLength = 0;
 Scene Renderer::scene;
 cl_mem Renderer::computeEntityHeap;
 size_t Renderer::computeEntityHeapLength = 0;
+cl_mem Renderer::computeKDTreeNodeHeap;
+size_t Renderer::computeKDTreeNodeHeapLength = 0;
 cl_mem Renderer::computeLightHeap;
 size_t Renderer::computeLightHeapLength = 0;
 
@@ -296,36 +298,108 @@ ErrorCode Renderer::transferResources() {
 void Renderer::loadScene(Scene&& scene) { Renderer::scene = std::move(scene); }
 
 ErrorCode Renderer::transferScene() {
-	if (scene.entityHeapLength == 0) { return ErrorCode::INVALID_ENTITY_HEAP_LENGTH; }
-	if (computeEntityHeapLength != 0) {
-		if (scene.entityHeapLength == computeEntityHeapLength) {
-			if (clEnqueueWriteBuffer(computeCommandQueue, computeEntityHeap, true, 0, computeEntityHeapLength * sizeof(Entity), scene.entityHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
-				return ErrorCode::DEVICE_ENTITY_HEAP_WRITE_FAILED;
-			}
-			return ErrorCode::SUCCESS;
+	if (scene.entityHeapLength == 0) {
+		if (computeEntityHeapLength != 0) {
+			if (clReleaseMemObject(computeEntityHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_ENTITY_HEAP_FAILED; }
+			computeEntityHeapLength = 0;
 		}
-		if (clReleaseMemObject(computeEntityHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_ENTITY_HEAP_FAILED; }
+		raytracingShader->setEntityHeap(nullptr, 0);
+	} else {
+		if (computeEntityHeapLength != 0) {
+			if (scene.entityHeapLength == computeEntityHeapLength) {
+				if (clEnqueueWriteBuffer(computeCommandQueue, computeEntityHeap, true, 0, computeEntityHeapLength * sizeof(Entity), scene.entityHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
+					return ErrorCode::DEVICE_ENTITY_HEAP_WRITE_FAILED;
+				}
+				return ErrorCode::SUCCESS;
+			}
+			if (clReleaseMemObject(computeEntityHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_ENTITY_HEAP_FAILED; }
+		}
+		cl_int err;
+		computeEntityHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, scene.entityHeapLength * sizeof(Entity), scene.entityHeap, &err);
+		if (!computeEntityHeap) { computeEntityHeapLength = 0; return ErrorCode::DEVICE_ENTITY_HEAP_REALLOCATION_AND_WRITE_FAILED; }
+		computeEntityHeapLength = scene.entityHeapLength;
+		raytracingShader->setEntityHeap(computeEntityHeap, computeEntityHeapLength);
 	}
-	cl_int err;
-	computeEntityHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, scene.entityHeapLength * sizeof(Entity), scene.entityHeap, &err);
-	if (!computeEntityHeap) { computeEntityHeapLength = 0; return ErrorCode::DEVICE_ENTITY_HEAP_REALLOCATION_AND_WRITE_FAILED; }
-	computeEntityHeapLength = scene.entityHeapLength;
-	raytracingShader->setEntityHeap(computeEntityHeap, computeEntityHeapLength);
 
-	if (scene.lightHeapLength == 0) { return ErrorCode::INVALID_LIGHT_HEAP_LENGTH; }
-	if (computeLightHeapLength != 0) {
-		if (scene.lightHeapLength == computeLightHeapLength) {
-			if (clEnqueueWriteBuffer(computeCommandQueue, computeLightHeap, true, 0, computeLightHeapLength * sizeof(Light), scene.lightHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
-				return ErrorCode::DEVICE_LIGHT_HEAP_WRITE_FAILED;
-			}
-			return ErrorCode::SUCCESS;
+	size_t kdTreeNodeHeapVectorSize = scene.kdTreeNodeHeap.size();
+	if (kdTreeNodeHeapVectorSize == 0) {
+		if (computeKDTreeNodeHeapLength != 0) {
+			if (clReleaseMemObject(computeKDTreeNodeHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_KD_TREE_NODE_HEAP_FAILED; }
+			computeKDTreeNodeHeapLength = 0;
 		}
-		if (clReleaseMemObject(computeLightHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_LIGHT_HEAP_FAILED; }
+		raytracingShader->setKDTree(nmath::Vector3f(0, 0, 0), nmath::Vector3f(0, 0, 0), nullptr, 0);
+	} else {
+		KDTreeNode* kdTreeNodeHeapVectorData = scene.kdTreeNodeHeap.data();
+		if (computeKDTreeNodeHeapLength != 0) {
+			if (kdTreeNodeHeapVectorSize == computeKDTreeNodeHeapLength) {
+				if (clEnqueueWriteBuffer(computeCommandQueue, computeKDTreeNodeHeap, true, 0, computeKDTreeNodeHeapLength * sizeof(KDTreeNode), kdTreeNodeHeapVectorData, 0, nullptr, nullptr) != CL_SUCCESS) {
+					return ErrorCode::DEVICE_KD_TREE_NODE_HEAP_WRITE_FAILED;
+				}
+				return ErrorCode::SUCCESS;
+			}
+			if (clReleaseMemObject(computeKDTreeNodeHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_KD_TREE_NODE_HEAP_FAILED; }
+		}
+		cl_int err;
+		computeKDTreeNodeHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, kdTreeNodeHeapVectorSize * sizeof(KDTreeNode), kdTreeNodeHeapVectorData, &err);
+		if (!computeKDTreeNodeHeap) { computeKDTreeNodeHeapLength = 0; return ErrorCode::DEVICE_KD_TREE_NODE_HEAP_REALLOCATION_AND_WRITE_FAILED; }
+		computeKDTreeNodeHeapLength = kdTreeNodeHeapVectorSize;
+		raytracingShader->setKDTree(scene.kdTree.position, scene.kdTree.size, computeKDTreeNodeHeap, computeKDTreeNodeHeapLength);
+		// TODO: Leaf heap needs to go too.
 	}
-	computeLightHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, scene.lightHeapLength * sizeof(Light), scene.lightHeap, &err);
-	if (!computeLightHeap) { computeLightHeapLength = 0; return ErrorCode::DEVICE_LIGHT_HEAP_REALLOCATION_AND_WRITE_FAILED; }
-	computeLightHeapLength = scene.lightHeapLength;
-	raytracingShader->setLightHeap(computeLightHeap, computeLightHeapLength);
+
+	if (scene.lightHeapLength == 0) {
+		if (computeLightHeapLength != 0) {
+			if (clReleaseMemObject(computeLightHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_LIGHT_HEAP_FAILED; }
+			computeLightHeapLength = 0;
+		}
+		raytracingShader->setLightHeap(nullptr, 0);
+
+		/*
+		* 
+		* NOTE: I assume that when you call LoadLibraryA, it loads the 32-bit DLL when you're running as 32-bit and the 64-bit one when running as 64-bit.
+		* In Linux this wouldn't work so easily AFAIK. Windows has these special extra files that specify version info and such for different instances of an ambigiuos
+		* name like "OpenCL.dll", so that's how LoadLibraryA presumably knows which exact file to load for which bit-width of the program.
+		* 
+		* NOTE: The compute device can have a completely different bit-width than the host (for example host 32-bit and GPU 64-bit).
+		* 
+		* NOTE: I am very sure that cl_mem is just a pointer, and no crazy behind the scenes magic is going on. That means that if you receive a pointer argument in the
+		* kernel and somehow output it's value, it'll be the same value as the cl_mem variable on the host.
+		* 
+		* NOTE: Following from those assumptions, in the case of the 64-bit GPU and the 32-bit CPU, allocating device memory would always give you back 32-bit values,
+		* since the size of cl_mem is 32-bit on 32-bit systems. But that only allows you to use like 4 GB of the VRAM, even if there is sooooo much more.
+		* I guess that's just the price one would have to pay.
+		* 
+		* What if it's the other way around? --> CPU 64-bit and GPU 32-bit?
+		*	- Then I think allocating device memory should still only give you back 32-bit values. Since everything is presumably little-endian,
+		*		copying that 64-bit value into the 32-bit container of the kernel argument shouldn't matter, since only the zeros get cut off and the 32-bit address contained
+		*		inside remains completely intact.
+		* 
+		* NOTE: Here is my understanding of what happens when you tell the compute device to use host memory for it's operations (obviously this is implementation dependant and only one of many possibilities):
+		*	- GPU almost definitely has virtual memory, which allows the GPU MMU to just map a part of host memory into a part of virtual GPU memory.
+		*	- That way the GPU doesn't really need to do anything special, it just uses the memory like normal.
+		*	- The interesting thing about that is that if you've got a 32-bit GPU and you use 2 GB of VRAM and 2 GB of host memory for your device memory, you can't add anymore, even though you technically still
+		*		have more physical memory left in VRAM.
+		* 
+		* NOTE: One last thing: It's defined by the standard that you can pass nullptr as a cl_mem variable into clSetKernelArg.
+		* 
+		*/
+
+	} else {
+		if (computeLightHeapLength != 0) {
+			if (scene.lightHeapLength == computeLightHeapLength) {
+				if (clEnqueueWriteBuffer(computeCommandQueue, computeLightHeap, true, 0, computeLightHeapLength * sizeof(Light), scene.lightHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
+					return ErrorCode::DEVICE_LIGHT_HEAP_WRITE_FAILED;
+				}
+				return ErrorCode::SUCCESS;
+			}
+			if (clReleaseMemObject(computeLightHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_LIGHT_HEAP_FAILED; }
+		}
+		cl_int err;
+		computeLightHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, scene.lightHeapLength * sizeof(Light), scene.lightHeap, &err);
+		if (!computeLightHeap) { computeLightHeapLength = 0; return ErrorCode::DEVICE_LIGHT_HEAP_REALLOCATION_AND_WRITE_FAILED; }
+		computeLightHeapLength = scene.lightHeapLength;
+		raytracingShader->setLightHeap(computeLightHeap, computeLightHeapLength);
+	}
 
 	return ErrorCode::SUCCESS;
 }

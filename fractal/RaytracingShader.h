@@ -11,6 +11,7 @@ public:
 	virtual void setRayOrigin(float rayOrigin) = 0;
 
 	virtual void setEntityHeap(cl_mem computeEntityHeap, uint64_t computeEntityHeapLength) = 0;
+	virtual void setKDTree(nmath::Vector3f position, nmath::Vector3f size, cl_mem computeKDTreeNodeHeap, uint64_t computeKDTreeNodeHeapLength) = 0;
 	virtual void setLightHeap(cl_mem computeLightHeap, uint64_t computeLightHeapLength) = 0;
 
 	virtual void setMaterialHeap(cl_mem computeMaterialHeap, uint64_t computeMaterialHeapLength) = 0;

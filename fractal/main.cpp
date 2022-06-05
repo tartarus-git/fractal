@@ -130,11 +130,12 @@ void updateWindowSizeVars() {
 
 #define EXIT_FROM_THREAD POST_THREAD_EXIT; goto releaseAndReturn;
 
+
 void graphicsLoop() {
 	updateWindowSizeVars();
 	windowResized = false;
 
-
+	debuglogger::out << alignof(uint64_t) << '\n';
 
 	DefaultShader mainShader;
 	ErrorCode err = Renderer::init(&mainShader, 2, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
@@ -160,6 +161,9 @@ void graphicsLoop() {
 	}
 	mainScene.entityHeap[1].position = nmath::Vector3f(500, -1000, 500);
 	mainScene.entityHeap[1].scale = nmath::Vector3f(1000, 0, 0);
+
+	//mainScene.generateKDTree();
+
 	Renderer::loadScene(std::move(mainScene));
 
 	ResourceHeap resources(0, 1);

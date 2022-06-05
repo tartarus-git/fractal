@@ -75,6 +75,8 @@ public:
 	static Scene scene;
 	static cl_mem computeEntityHeap;
 	static size_t computeEntityHeapLength;
+	static cl_mem computeKDTreeNodeHeap;
+	static size_t computeKDTreeNodeHeapLength;
 	static cl_mem computeLightHeap;
 	static size_t computeLightHeapLength;
 

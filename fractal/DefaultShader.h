@@ -60,17 +60,24 @@ public:
 		clSetKernelArg(computeKernel, 7, sizeof(uint64_t), &computeEntityHeapLength);
 	}
 
+	void setKDTree(nmath::Vector3f position, nmath::Vector3f size, cl_mem computeKDTreeNodeHeap, uint64_t computeKDTreeNodeHeapLength) override {
+		clSetKernelArg(computeKernel, 8, sizeof(nmath::Vector3f), &position);
+		clSetKernelArg(computeKernel, 9, sizeof(nmath::Vector3f), &size);
+		clSetKernelArg(computeKernel, 10, sizeof(cl_mem), &computeKDTreeNodeHeap);
+		clSetKernelArg(computeKernel, 11, sizeof(uint64_t), &computeKDTreeNodeHeapLength);
+	}
+
 	void setLightHeap(cl_mem computeLightHeap, uint64_t computeLightHeapLength) override {
-		clSetKernelArg(computeKernel, 8, sizeof(cl_mem), &computeLightHeap);
-		clSetKernelArg(computeKernel, 9, sizeof(uint64_t), &computeLightHeapLength);
+		clSetKernelArg(computeKernel, 12, sizeof(cl_mem), &computeLightHeap);
+		clSetKernelArg(computeKernel, 13, sizeof(uint64_t), &computeLightHeapLength);
 	}
 
 	void setMaterialHeap(cl_mem computeMaterialHeap, uint64_t computeMaterialHeapLength) override {
-		clSetKernelArg(computeKernel, 10, sizeof(cl_mem), &computeMaterialHeap);
-		clSetKernelArg(computeKernel, 11, sizeof(uint64_t), &computeMaterialHeapLength);
+		clSetKernelArg(computeKernel, 14, sizeof(cl_mem), &computeMaterialHeap);
+		clSetKernelArg(computeKernel, 15, sizeof(uint64_t), &computeMaterialHeapLength);
 	}
 
 	void setMaterialHeapOffset(uint64_t computeMaterialHeapOffset) override {
-		clSetKernelArg(computeKernel, 12, sizeof(uint64_t), &computeMaterialHeapOffset);
+		clSetKernelArg(computeKernel, 16, sizeof(uint64_t), &computeMaterialHeapOffset);
 	}
 };
