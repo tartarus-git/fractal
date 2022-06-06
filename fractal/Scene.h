@@ -39,6 +39,8 @@ public:
 		kdTree = right.kdTree;
 		kdTreeNodeHeap = std::move(right.kdTreeNodeHeap);
 
+		leafObjectHeap = std::move(right.leafObjectHeap);
+
 		return *this;
 	}
 
@@ -189,7 +191,32 @@ public:
 	}
 
 	void generateKDTree() {
+		
 		for (uint64_t i = 0; i < entityHeapLength; i++) {
+			float entityLowestValue = entityHeap[i].position.x - entityHeap[i].scale.x;
+			if (entityLowestValue < kdTree.position.x) { kdTree.position.x = entityLowestValue; }
+			entityLowestValue = entityHeap[i].position.y - entityHeap[i].scale.x;
+			if (entityLowestValue < kdTree.position.y) { kdTree.position.y = entityLowestValue; }
+			entityLowestValue = entityHeap[i].position.z - entityHeap[i].scale.x;
+			if (entityLowestValue < kdTree.position.z) { kdTree.position.z = entityLowestValue; }
+		}
+		for (uint64_t i = 0; i < entityHeapLength; i++) {
+			float entityLowestValue = entityHeap[i].position.x + entityHeap[i].scale.x;
+			if (entityLowestValue > kdTree.size.x) { kdTree.size.x = entityLowestValue; }
+			entityLowestValue = entityHeap[i].position.y + entityHeap[i].scale.x;
+			if (entityLowestValue > kdTree.size.y) { kdTree.size.y = entityLowestValue; }
+			entityLowestValue = entityHeap[i].position.z + entityHeap[i].scale.x;
+			if (entityLowestValue > kdTree.size.z) { kdTree.size.z = entityLowestValue; }
+		}
+		for (int i = 0; i < entityHeapLength; i++) {
+			leafObjectHeap.push_back(i);
+		}
+		kdTreeNodeHeap.push_back({ 1, (uint64_t)-1, (uint32_t)-1, (kdTree.position.x + kdTree.size.x) / 2 });
+		kdTreeNodeHeap.push_back({ 0, 0, entityHeapLength, 0 });
+		kdTreeNodeHeap.push_back({ 0, 0, 0, 0 });
+		return;
+
+		/*for (uint64_t i = 0; i < entityHeapLength; i++) {
 			float entityLowestValue = entityHeap[i].position.x - entityHeap[i].scale.x;
 			if (entityLowestValue < kdTree.position.x) { kdTree.position.x = entityLowestValue; }
 			entityLowestValue = entityHeap[i].position.y - entityHeap[i].scale.x;
@@ -211,6 +238,7 @@ public:
 
 		generateKDTreeNode(0, -1, kdTree.position, nmath::Vector3f(kdTree.size.x / 2, kdTree.size.y, kdTree.size.z), limitBegins, leftLimitEnds, 0);
 		generateKDTreeNode(1, -1, nmath::Vector3f(kdTree.position.x + kdTree.split, kdTree.position.y, kdTree.position.z), nmath::Vector3f(kdTree.size.x / 2, kdTree.size.y, kdTree.size.z), rightLimitBegins, limitEnds, 0);
+		*/
 	}
 
 

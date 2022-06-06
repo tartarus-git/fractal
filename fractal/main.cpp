@@ -162,7 +162,7 @@ void graphicsLoop() {
 	mainScene.entityHeap[1].position = nmath::Vector3f(500, -1000, 500);
 	mainScene.entityHeap[1].scale = nmath::Vector3f(1000, 0, 0);
 
-	//mainScene.generateKDTree();
+	mainScene.generateKDTree();
 
 	Renderer::loadScene(std::move(mainScene));
 

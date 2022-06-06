@@ -56,6 +56,8 @@ cl_mem Renderer::computeEntityHeap;
 size_t Renderer::computeEntityHeapLength = 0;
 cl_mem Renderer::computeKDTreeNodeHeap;
 size_t Renderer::computeKDTreeNodeHeapLength = 0;
+cl_mem Renderer::computeLeafObjectHeap;
+size_t Renderer::computeLeafObjectHeapLength = 0;
 cl_mem Renderer::computeLightHeap;
 size_t Renderer::computeLightHeapLength = 0;
 
@@ -271,25 +273,32 @@ ErrorCode Renderer::resizeFrame(uint32_t newFrameWidth, uint32_t newFrameHeight)
 void Renderer::loadResources(ResourceHeap&& resources) { Renderer::resources = std::move(resources); }
 
 ErrorCode Renderer::transferResources() {
-	if (resources.materialHeapLength == 0) { return ErrorCode::INVALID_MATERIAL_HEAP_LENGTH; }
-	if (computeMaterialHeapLength != 0) {
-		if (resources.materialHeapLength == computeMaterialHeapLength) {
-			if (clEnqueueWriteBuffer(computeCommandQueue, computeMaterialHeap, true, 0, computeMaterialHeapLength * sizeof(Material), resources.materialHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
-				return ErrorCode::DEVICE_MATERIAL_HEAP_WRITE_FAILED;
-			}
-			return ErrorCode::SUCCESS;
+	if (resources.materialHeapLength == 0) {
+		if (computeMaterialHeapLength != 0) {
+			if (clReleaseMemObject(computeMaterialHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_MATERIAL_HEAP_FAILED; }
+			computeMaterialHeapLength = 0;
 		}
-		if (clReleaseMemObject(computeMaterialHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_MATERIAL_HEAP_FAILED; }
-	}
-	cl_int err;
-	computeMaterialHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, resources.materialHeapLength * sizeof(Material), resources.materialHeap, &err);
-	if (!computeMaterialHeap) { computeMaterialHeapLength = 0; return ErrorCode::DEVICE_MATERIAL_HEAP_REALLOCATION_AND_WRITE_FAILED; }
-	computeMaterialHeapLength = resources.materialHeapLength;
-	raytracingShader->setMaterialHeap(computeMaterialHeap, computeMaterialHeapLength);
+		raytracingShader->setMaterialHeap(nullptr, 0);
+	} else {
+		if (computeMaterialHeapLength != 0) {
+			if (resources.materialHeapLength == computeMaterialHeapLength) {
+				if (clEnqueueWriteBuffer(computeCommandQueue, computeMaterialHeap, true, 0, computeMaterialHeapLength * sizeof(Material), resources.materialHeap, 0, nullptr, nullptr) != CL_SUCCESS) {
+					return ErrorCode::DEVICE_MATERIAL_HEAP_WRITE_FAILED;
+				}
+				return ErrorCode::SUCCESS;
+			}
+			if (clReleaseMemObject(computeMaterialHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_MATERIAL_HEAP_FAILED; }
+		}
+		cl_int err;
+		computeMaterialHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, resources.materialHeapLength * sizeof(Material), resources.materialHeap, &err);
+		if (!computeMaterialHeap) { computeMaterialHeapLength = 0; return ErrorCode::DEVICE_MATERIAL_HEAP_REALLOCATION_AND_WRITE_FAILED; }
+		computeMaterialHeapLength = resources.materialHeapLength;
+		raytracingShader->setMaterialHeap(computeMaterialHeap, computeMaterialHeapLength);
 
-	if (resources.materialHeapOffset != computeMaterialHeapOffset) {
-		raytracingShader->setMaterialHeapOffset(resources.materialHeapOffset);
-		computeMaterialHeapOffset = resources.materialHeapOffset;
+		if (resources.materialHeapOffset != computeMaterialHeapOffset) {
+			raytracingShader->setMaterialHeapOffset(resources.materialHeapOffset);
+			computeMaterialHeapOffset = resources.materialHeapOffset;
+		}
 	}
 
 	return ErrorCode::SUCCESS;
@@ -321,6 +330,7 @@ ErrorCode Renderer::transferScene() {
 		raytracingShader->setEntityHeap(computeEntityHeap, computeEntityHeapLength);
 	}
 
+	// TODO: Consider putting this under the umbrella of entityHeapLength != 0, since you wouldn't ever want a tree without objects right?
 	size_t kdTreeNodeHeapVectorSize = scene.kdTreeNodeHeap.size();
 	if (kdTreeNodeHeapVectorSize == 0) {
 		if (computeKDTreeNodeHeapLength != 0) {
@@ -328,6 +338,11 @@ ErrorCode Renderer::transferScene() {
 			computeKDTreeNodeHeapLength = 0;
 		}
 		raytracingShader->setKDTree(nmath::Vector3f(0, 0, 0), nmath::Vector3f(0, 0, 0), nullptr, 0);
+		if (computeLeafObjectHeapLength != 0) {
+			if (clReleaseMemObject(computeLeafObjectHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_LEAF_OBJECT_HEAP_FAILED; }
+			computeLeafObjectHeapLength = 0;
+		}
+		raytracingShader->setLeafObjectHeap(nullptr, 0);
 	} else {
 		KDTreeNode* kdTreeNodeHeapVectorData = scene.kdTreeNodeHeap.data();
 		if (computeKDTreeNodeHeapLength != 0) {
@@ -344,7 +359,22 @@ ErrorCode Renderer::transferScene() {
 		if (!computeKDTreeNodeHeap) { computeKDTreeNodeHeapLength = 0; return ErrorCode::DEVICE_KD_TREE_NODE_HEAP_REALLOCATION_AND_WRITE_FAILED; }
 		computeKDTreeNodeHeapLength = kdTreeNodeHeapVectorSize;
 		raytracingShader->setKDTree(scene.kdTree.position, scene.kdTree.size, computeKDTreeNodeHeap, computeKDTreeNodeHeapLength);
-		// TODO: Leaf heap needs to go too.
+
+		size_t leafObjectHeapVectorSize = scene.leafObjectHeap.size();
+		uint64_t* leafObjectHeapVectorData = scene.leafObjectHeap.data();
+		if (computeLeafObjectHeapLength != 0) {
+			if (leafObjectHeapVectorSize == computeLeafObjectHeapLength) {
+				if (clEnqueueWriteBuffer(computeCommandQueue, computeLeafObjectHeap, true, 0, computeLeafObjectHeapLength * sizeof(uint64_t), leafObjectHeapVectorData, 0, nullptr, nullptr) != CL_SUCCESS) {
+					return ErrorCode::DEVICE_LEAF_OBJECT_HEAP_WRITE_FAILED;
+				}
+				return ErrorCode::SUCCESS;
+			}
+			if (clReleaseMemObject(computeLeafObjectHeap) != CL_SUCCESS) { return ErrorCode::DEVICE_RELEASE_LEAF_OBJECT_HEAP_FAILED; }
+		}
+		computeLeafObjectHeap = clCreateBuffer(computeContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, leafObjectHeapVectorSize * sizeof(uint64_t), leafObjectHeapVectorData, &err);
+		if (!computeLeafObjectHeap) { computeLeafObjectHeapLength = 0; return ErrorCode::DEVICE_LEAF_OBJECT_HEAP_REALLOCATION_AND_WRITE_FAILED; }
+		computeLeafObjectHeapLength = leafObjectHeapVectorSize;
+		raytracingShader->setLeafObjectHeap(computeLeafObjectHeap, computeLeafObjectHeapLength);
 	}
 
 	if (scene.lightHeapLength == 0) {

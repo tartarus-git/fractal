@@ -5,11 +5,11 @@
 #include <cstdint>
 
 struct KDTreeNode {
-	uint64_t childrenIndex;					// dimension encoded
+	uint64_t childrenIndex;					// dimension encoded in first two bits
 	uint64_t parentIndex;
 	uint32_t objectCount;
 	float split;
-	//char dimension;			// Encoded in last two bits of childrenIndex.
+	//char dimension;
 };
 
 struct KDTree {

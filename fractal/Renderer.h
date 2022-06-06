@@ -77,6 +77,8 @@ public:
 	static size_t computeEntityHeapLength;
 	static cl_mem computeKDTreeNodeHeap;
 	static size_t computeKDTreeNodeHeapLength;
+	static cl_mem computeLeafObjectHeap;
+	static size_t computeLeafObjectHeapLength;
 	static cl_mem computeLightHeap;
 	static size_t computeLightHeapLength;
 
