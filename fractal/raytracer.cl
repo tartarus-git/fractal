@@ -83,7 +83,14 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 	How does this algorithm work?
 		1. Checks each dimension of rayOrigin against the AABB and sees which side the rayOrigin is on or if it's inside the AABB.
 			It also calculates the "time" it would take to collide with the closest side of the AABB in that dimension.
-			If at any point one of the dimensions of rayOrigin is outside of the AABB and the ray component in that dimension is also zero, returns -1 since ray will never hit AABB.
+			If at any point one of the dimensions of rayOrigin is outside of the AABB and the ray component in that dimension is going away from it's corresponding wall, returns -1 since ray will never hit AABB.
+			PROOF for the above statement: The only way to move away from a wall in a single dimension of the ray is to be outside of the AABB in that dimension. Since you are moving away from the plane of the wall, and since
+			every other wall requires the ray to cross the plane from which you are currently moving yourself away from (because you are currently outside of the AABB), it follows that you can never hit any valid wall like this.
+			NOTE: We used to just do ray.dimension != 0 for the check, but replacing != with >/< is good for the above reason and shouldn't hurt our performance.
+			NOTE: Even with != 0 though, you still wouldn't see any mirror images of the AABB's in the sky, like you might expect. This is because of the filtering code at the end of the function. It looks for the biggest distance. This distance will be closest to zero if the distances
+			are negative (like they would be when you're looking into the opposite direction of the AABB (into the sky)). The distances that are closest to zero are either negative distances to parts of the dimension planes that aren't part of the AABB (so those will get filtered out) or
+			0 if you are inside the box in at least one dimension (if this is the case and the rest are negative, 0 will be selected and multiplied with ray before being added to rayOrigin. Since that point will always be outside of the AABB in the other two dimensions, it gets filtered out).
+			It's kind of complicated, but basically everything works out even if we only use !=. Using >/< is just way better for efficiency in the cases where the player isn't looking at an AABB, then we can save a bunch of processing at no extra cost in other situations. VERY GOOD DEAL!
 		(The reason step 1 has so much code is because of efficiency. I don't see a way around the code bloat without sacrificing efficiency.)
 
 		2. Finds the biggest recorded time and uses that time and it's corresponding dimension to calculate where in space the hit point is.
@@ -110,14 +117,14 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 	float3 intersectionTimes;
 	
 	if (rayOrigin.x <= startPosition.x) {
-		if (ray.x != 0) {
+		if (ray.x > 0) {
 			intersectionTimes.x = (startPosition.x - rayOrigin.x) / ray.x;
 		} else {
 			return -1;
 		}
 	} 
 	else if (rayOrigin.x >= stopPosition.x) {
-		if (ray.x != 0) {
+		if (ray.x < 0) {
 			intersectionTimes.x = (stopPosition.x - rayOrigin.x) / ray.x;
 		} else {
 			return -1;
@@ -127,7 +134,7 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 		intersectionTimes.x = 0;
 
 		if (rayOrigin.y <= startPosition.y) {
-			if (ray.y != 0) {
+			if (ray.y > 0) {
 				intersectionTimes.y = (startPosition.y - rayOrigin.y) / ray.y;
 				goto finishZ;
 			} else {
@@ -135,7 +142,7 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 			}
 		}
 		else if (rayOrigin.y >= stopPosition.y) {
-			if (ray.y != 0) {
+			if (ray.y < 0) {
 				intersectionTimes.y = (stopPosition.y - rayOrigin.y) / ray.y;
 				goto finishZ;
 			} else {
@@ -146,7 +153,7 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 			intersectionTimes.y = 0;
 
 			if (rayOrigin.z <= startPosition.z) {
-				if (ray.z != 0) {
+				if (ray.z > 0) {
 					intersectionTimes.z = (startPosition.z - rayOrigin.z) / ray.z;
 					goto nothingToFinish;
 				} else {
@@ -154,7 +161,7 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 				}
 			}
 			else if (rayOrigin.z >= stopPosition.z) {
-				if (ray.z != 0) {
+				if (ray.z < 0) {
 					intersectionTimes.z = (stopPosition.z - rayOrigin.z) / ray.z;
 					goto nothingToFinish;
 				} else {
@@ -167,14 +174,14 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 	}
 
 		if (rayOrigin.y <= startPosition.y) {
-			if (ray.y != 0) {
+			if (ray.y > 0) {
 				intersectionTimes.y = (startPosition.y - rayOrigin.y) / ray.y;
 			} else {
 				return -1;
 			}
 		}
 		else if (rayOrigin.y >= stopPosition.y) {
-			if (ray.y != 0) {
+			if (ray.y < 0) {
 				intersectionTimes.y = (stopPosition.y - rayOrigin.y) / ray.y;
 			} else {
 				return -1;
@@ -185,14 +192,14 @@ inline float rayIntersectAABB(float3 rayOrigin, float3 ray, float3 startPosition
 
 finishZ:
 			if (rayOrigin.z <= startPosition.z) {
-				if (ray.z != 0) {
+				if (ray.z > 0) {
 					intersectionTimes.z = (startPosition.z - rayOrigin.z) / ray.z;
 				} else {
 					return -1;
 				}
 			}
 			else if (rayOrigin.z >= stopPosition.z) {
-				if (ray.z != 0) {
+				if (ray.z < 0) {
 					intersectionTimes.z = (stopPosition.z - rayOrigin.z) / ray.z;
 				} else {
 					return -1;
@@ -204,7 +211,7 @@ finishZ:
 nothingToFinish:
 
 	if (intersectionTimes.x > intersectionTimes.y) {
-		if (intersectionTimes.x > intersectionTimes.z) {			// TODO: Why doesn't this algorithm produce mirror images?
+		if (intersectionTimes.x > intersectionTimes.z) {
 			rayOrigin += ray * intersectionTimes.x;
 			if (rayOrigin.y > startPosition.y && rayOrigin.y < stopPosition.y && rayOrigin.z > startPosition.z && rayOrigin.z < stopPosition.z) { return intersectionTimes.x; }
 		} else {
@@ -223,6 +230,9 @@ nothingToFinish:
 
 	return -1;
 }
+
+#define DEBUG_RETURN write_imageui(frame, coords, (uint4)(100, 100, 0, 255)); return;
+#define SECOND_DEBUG_RETURN write_imageui(frame, coords, (uint4)(0, 100, 100, 255)); return;
 
 inline uint4 sampleSkybox(float3 ray) {
 	return (uint4)(0, 255, 0, 255);
@@ -256,22 +266,29 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
 	ulong previousKDTreeNodeIndex = 0;
 	ulong currentKDTreeNodeIndex = 0;
-	float tempdist;
+	float tempdist = 1;
 	while (true) {
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == -1) {
-			float3 previousKDTreeStopPosition = kdTreeStopPosition;
+			float3 rightKDTreeNodeStartPosition;
+			float3 leftKDTreeNodeStopPosition;
 			// NOTE: If no case is hit, program keeps executing, defined so that no weird behaviour happens. Basically as if default: break; were there.
 				switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-				case 0: kdTreeStopPosition.x = kdTreeNodeHeap[currentKDTreeNodeIndex].split; break;			// TODO: Consider optimizing this by array accessing the vector and thereby not needing the switch case. Is that more efficient? No pitfalls?
+				case 0:
+				rightKDTreeNodeStartPosition.x = kdTreeNodeHeap[currentKDTreeNodeIndex].split;
+				rightKDTreeNodeStartPosition.y = kdTreeStartPosition.y;
+				rightKDTreeNodeStartPosition.z = kdTreeStartPosition.z;
+				leftKDTreeNodeStopPosition.x = kdTreeNodeHeap[currentKDTreeNodeIndex].split;
+				leftKDTreeNodeStopPosition.y = kdTreeStopPosition.y;
+				leftKDTreeNodeStopPosition.z = kdTreeStopPosition.z;
+				break;			// TODO: Consider optimizing this by array accessing the vector and thereby not needing the switch case. Is that more efficient? No pitfalls?
 				case 1: kdTreeStopPosition.y = kdTreeNodeHeap[currentKDTreeNodeIndex].split; break;
 				case 2: kdTreeStopPosition.z = kdTreeNodeHeap[currentKDTreeNodeIndex].split;
 				}
-				float leftDist = rayIntersectAABB(rayOrigin, ray, kdTreeStartPosition, kdTreeStopPosition);				// TODO: Something's wrong with this algorithm I think, somehow the half-half thing I've got going doesn't show in this system.
-				float rightDist = rayIntersectAABB(rayOrigin, ray, kdTreeStopPosition, previousKDTreeStopPosition);
-				if (leftDist < rightDist || rightDist == -1) {			// TODO: Add -1 checks.
+				float leftDist = rayIntersectAABB(cameraPos, ray, kdTreeStartPosition, leftKDTreeNodeStopPosition);
+				float rightDist = rayIntersectAABB(cameraPos, ray, rightKDTreeNodeStartPosition, kdTreeStopPosition);
+				if (rightDist == -1 || (leftDist != -1 && leftDist < rightDist)) {											// TODO: Is this or seperate if statements better? (branching versus boolean logic, which one is faster, does compiler automatically decide? It doesn't know the probabilities of variables being specific values and such though, how could it?).
 					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
-						kdTreeStartPosition = kdTreeStopPosition;
-						kdTreeStopPosition = previousKDTreeStopPosition;
+						kdTreeStartPosition = rightKDTreeNodeStartPosition;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
 						continue;
 					}            // First parentIndex needs to be something other than the two child indices.
@@ -281,11 +298,13 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 						continue;
 					}
+					kdTreeStopPosition = leftKDTreeNodeStopPosition;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
 					tempdist = leftDist;
 					continue;
 				}
 					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
+						kdTreeStopPosition = leftKDTreeNodeStopPosition;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
 						continue;
 					}
@@ -296,8 +315,7 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 						continue;
 					}
-					kdTreeStartPosition = kdTreeStopPosition;
-					kdTreeStopPosition = previousKDTreeStopPosition;
+					kdTreeStartPosition = rightKDTreeNodeStartPosition;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
 					tempdist = rightDist;
 					continue;
@@ -307,7 +325,7 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 			return;
 		}
 		for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
-			write_imageui(frame, coords, (uint4)(0, 0, fmin(tempdist, 1) * 255, 255));
+			write_imageui(frame, coords, (uint4)(0, 0, fmin(1.0f, 1) * 255, 255));
 			return;
 			//bool good = getRayColor(entityHeap[leafObjectHeap[i]]);
 			//if (good) { goto escapeWhileLoop; }
