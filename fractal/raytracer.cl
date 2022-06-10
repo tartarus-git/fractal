@@ -239,7 +239,7 @@ inline uint4 sampleSkybox(float3 ray) {
 }
 
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
-						__global Entity* entityHeap, ulong entityHeapLength, float3 kdTreeStartPosition, float3 kdTreeStopPosition, __global KDTreeNode* kdTreeNodeHeap, ulong kdTreeNodeHeapLength, 
+						__global Entity* entityHeap, ulong entityHeapLength, float3 kdTreePosition, float3 kdTreeSize, __global KDTreeNode* kdTreeNodeHeap, ulong kdTreeNodeHeapLength, 
 						__global ulong* leafObjectHeap, ulong leafObjectHeapLength, 
 						__global Light* lightHeap, ulong lightHeapLength, __global Material* materialHeap, ulong materialHeapLength, 
 						ulong materialHeapOffset) {
@@ -252,77 +252,123 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 	float3 ray = (float3)(coords.x - (int)frameWidth / 2, -coords.y + (int)frameHeight / 2, -rayOriginZ);
 
 	ray = multiplyMatWithFloat3(cameraRotationMat, ray);
-	ray = normalize(ray);
 
 	// TODO: Think about what checks you should do and what errors you should just let crash the system. Speed is key here.
 	if (entityHeapLength == 0 || kdTreeNodeHeapLength == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 
-	float3 colorCollector = (float3)(0, 0, 0);
-
-	if (rayIntersectAABB(cameraPos, ray, kdTreeStartPosition, kdTreeStopPosition) == -1) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+	if (rayIntersectAABB(cameraPos, ray, kdTreePosition, kdTreePosition + kdTreeSize) == -1) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 	//if (rayIntersectAABB(cameraPos, ray, (float3)(0, 0, 0), (float3)(10, 10, 10)) == -1) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 	//write_imageui(frame, coords, (uint4)(0, 0, 0, 255));
 	//return;
 
 	ulong previousKDTreeNodeIndex = 0;
 	ulong currentKDTreeNodeIndex = 0;
-	float tempdist = 1;
+	float3 leftKDTreeNodeSize;
+	float3 rightKDTreeNodePosition;
+	float3 rightKDTreeNodeSize;
 	while (true) {
+
+				// TODO: Put in a note about why we decided to go with percentage + sizes kd tree method. You've got it written down on your paper. Even though different method would be better, percentage + sizes is the only one where the tree can theoretically be endlessly long without needing
+				// and endlessly long cache, which is super good for us.
+
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == -1) {
-			float3 rightKDTreeNodeStartPosition;
-			float3 leftKDTreeNodeStopPosition;
-			// NOTE: If no case is hit, program keeps executing, defined so that no weird behaviour happens. Basically as if default: break; were there.
+			// TODO: Write a better note for the following: NOTE: If no case is hit, program keeps executing, defined so that no weird behaviour happens. Basically as if default: break; were there.
 				switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
 				case 0:
-				rightKDTreeNodeStartPosition.x = kdTreeNodeHeap[currentKDTreeNodeIndex].split;
-				rightKDTreeNodeStartPosition.y = kdTreeStartPosition.y;
-				rightKDTreeNodeStartPosition.z = kdTreeStartPosition.z;
-				leftKDTreeNodeStopPosition.x = kdTreeNodeHeap[currentKDTreeNodeIndex].split;
-				leftKDTreeNodeStopPosition.y = kdTreeStopPosition.y;
-				leftKDTreeNodeStopPosition.z = kdTreeStopPosition.z;
-				break;			// TODO: Consider optimizing this by array accessing the vector and thereby not needing the switch case. Is that more efficient? No pitfalls?
-				case 1: kdTreeStopPosition.y = kdTreeNodeHeap[currentKDTreeNodeIndex].split; break;
-				case 2: kdTreeStopPosition.z = kdTreeNodeHeap[currentKDTreeNodeIndex].split;
+				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split), kdTreeSize.y, kdTreeSize.z);
+					leftKDTreeNodeSize = (float3)(kdTreeSize.x * kdTreeNodeHeap[currentKDTreeNodeIndex].split, kdTreeSize.y, kdTreeSize.z);
+					rightKDTreeNodePosition = (float3)(kdTreePosition.x + leftKDTreeNodeSize.x, kdTreePosition.y, kdTreePosition.z);
+					break;
+				case 1:
+				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split), kdTreeSize.z);
+					leftKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y * kdTreeNodeHeap[currentKDTreeNodeIndex].split, kdTreeSize.z);
+					rightKDTreeNodePosition = (float3)(kdTreePosition.x, kdTreePosition.y + leftKDTreeNodeSize.y, kdTreePosition.z);
+					break;
+				case 2:
+				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y, kdTreeSize.z * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split));
+					leftKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y, kdTreeSize.z * kdTreeNodeHeap[currentKDTreeNodeIndex].split);
+					rightKDTreeNodePosition = (float3)(kdTreePosition.x, kdTreePosition.y, kdTreePosition.z + leftKDTreeNodeSize.z);
+					break;
 				}
-				float leftDist = rayIntersectAABB(cameraPos, ray, kdTreeStartPosition, leftKDTreeNodeStopPosition);
-				float rightDist = rayIntersectAABB(cameraPos, ray, rightKDTreeNodeStartPosition, kdTreeStopPosition);
-				if (rightDist == -1 || (leftDist != -1 && leftDist < rightDist)) {											// TODO: Is this or seperate if statements better? (branching versus boolean logic, which one is faster, does compiler automatically decide? It doesn't know the probabilities of variables being specific values and such though, how could it?).
+				float rightDist = rayIntersectAABB(cameraPos, ray, rightKDTreeNodePosition, rightKDTreeNodePosition + rightKDTreeNodeSize);
+				if (rightDist == -1) {
 					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
-						kdTreeStartPosition = rightKDTreeNodeStartPosition;
-						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
-						continue;
-					}            // First parentIndex needs to be something other than the two child indices.
+						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
+						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
+						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						}
+					}
+					kdTreeSize = leftKDTreeNodeSize;
+					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
+					continue;
+				}
+				float leftDist = rayIntersectAABB(cameraPos, ray, kdTreePosition, kdTreePosition + rightKDTreeNodeSize);
+				if (leftDist == -1) {
 					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
 						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-						continue;
+						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						}
 					}
-					kdTreeStopPosition = leftKDTreeNodeStopPosition;
-					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
-					tempdist = leftDist;
+					kdTreePosition = rightKDTreeNodePosition;
+					kdTreeSize = rightKDTreeNodeSize;
+					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
 					continue;
 				}
+
+				if (leftDist < rightDist) {											// TODO: Is this or seperate if statements better? (branching versus boolean logic, which one is faster, does compiler automatically decide? It doesn't know the probabilities of variables being specific values and such though, how could it?).
+					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
+						kdTreePosition = rightKDTreeNodePosition;
+						kdTreeSize = rightKDTreeNodeSize;
+						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
+						continue;
+					}            // NOTE: First parentIndex needs to be something other than the two child indices.
 					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
-						kdTreeStopPosition = leftKDTreeNodeStopPosition;
+						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
+						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
+						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+						case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
+						case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
+						case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
+						}
+					}
+					kdTreeSize = leftKDTreeNodeSize;				// TODO: This could be avoided by storing left... in kdTreeSize from getgo. It would need math to be done in the above switch case though, it might be more efficient that way given the probabilities, but I'm not sure, I sort of don't think so because of global illumination.
+					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
+					continue;
+				}
+
+					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
+						kdTreeSize = leftKDTreeNodeSize;			// TODO: Again, this could be made more efficient as above, not sure about it though.
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
 						continue;
 					}
 					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
-						templabelthing:
 						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-						continue;
+						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+						}
 					}
-					kdTreeStartPosition = rightKDTreeNodeStartPosition;
+					kdTreePosition = rightKDTreeNodePosition;
+					kdTreeSize = rightKDTreeNodeSize;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
-					tempdist = rightDist;
 					continue;
 		}
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == 0) {
-			write_imageui(frame, coords, (uint4)(255, 0, 0, 255));
-			return;
+			//write_imageui(frame, coords, (uint4)(255, 0, 0, 255));
+			//return;
 		}
 		for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
 			write_imageui(frame, coords, (uint4)(0, 0, fmin(1.0f, 1) * 255, 255));
@@ -336,15 +382,15 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 		currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex == previousKDTreeNodeIndex) {
 			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-			case 0: kdTreeStopPosition.x += kdTreeNodeHeap[currentKDTreeNodeIndex].split - kdTreeStartPosition.x; continue;			// TODO: Make this compatible with non-half lengths.
-			case 1: kdTreeStopPosition.y += kdTreeNodeHeap[currentKDTreeNodeIndex].split - kdTreeStartPosition.y; continue;			// TODO: Use percentage as split to make that happen.
-			case 2: kdTreeStopPosition.z += kdTreeNodeHeap[currentKDTreeNodeIndex].split - kdTreeStartPosition.z; continue;
+			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
+			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
 			}
 		}
 		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-		case 0: kdTreeStartPosition.x += kdTreeStopPosition.x - kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-		case 1: kdTreeStartPosition.y += kdTreeStopPosition.y - kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-		case 2: kdTreeStartPosition.z += kdTreeStopPosition.z - kdTreeNodeHeap[currentKDTreeNodeIndex].split;
+		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
+		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
+		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
 		}
 
 		/*while (true) {

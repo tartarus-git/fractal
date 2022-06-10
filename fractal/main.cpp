@@ -146,8 +146,8 @@ void graphicsLoop() {
 	Renderer::transferCameraRotation();
 	Renderer::transferCameraFOV();
 
-	Scene mainScene(100, 5);
-	for (int i = 0; i < 100; i++) {
+	Scene mainScene(10, 5);
+	for (int i = 0; i < 10; i++) {
 		Entity entity;
 		entity.position = nmath::Vector3f(rand() % 1000, 0, rand() % 1000);
 		entity.scale = nmath::Vector3f(10, 0, 0);
