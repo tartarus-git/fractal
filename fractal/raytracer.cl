@@ -458,8 +458,8 @@ for (int j = 0; j < 10; j++) {
 					continue;
 		}
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == 0) {
-			//write_imageui(frame, coords, (uint4)((currentKDTreeNodeIndex * 100) % 256, 0, 0, 255));
-			//return;
+			write_imageui(frame, coords, (uint4)((currentKDTreeNodeIndex * 100) % 256, 0, 0, 255));
+			return;
 		}
 		for (ulong i = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex); i < removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
 			write_imageui(frame, coords, (uint4)(0, 0, (currentKDTreeNodeIndex * 100) % 256, 255));
