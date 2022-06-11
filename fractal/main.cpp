@@ -146,12 +146,22 @@ void graphicsLoop() {
 	Renderer::transferCameraRotation();
 	Renderer::transferCameraFOV();
 
-	Scene mainScene(10, 5);
-	for (int i = 0; i < 10; i++) {
-		Entity entity;
-		entity.position = nmath::Vector3f(rand() % 1000, rand() % 1000, rand() % 1000);
-		entity.scale = nmath::Vector3f(10, 0, 0);
-		mainScene.entityHeap[i] = entity;
+	Scene mainScene(64, 5);
+	/*for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			for (int x = 0; x < 4; x++) {
+				Entity entity;
+				entity.position = nmath::Vector3f(i * 40, j * 40, x * 40);
+				entity.scale = nmath::Vector3f(10, 0, 0);
+				mainScene.entityHeap[i * 16 + j * 4 + x] = entity;
+			}
+		}
+	}*/
+	for (int i = 0; i < mainScene.entityHeapLength; i++) {
+				Entity entity;
+				entity.position = nmath::Vector3f(rand() % 1000, rand() % 1000, rand() % 1000);
+				entity.scale = nmath::Vector3f(10, 0, 0);
+				mainScene.entityHeap[i] = entity;
 	}
 	for (int i = 0; i < 5; i++) {
 		Light light;

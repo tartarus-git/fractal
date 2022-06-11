@@ -148,10 +148,10 @@ public:
 		uint64_t& xLimitEnd = limitEnds[0];
 		uint64_t& zLimitEnd = limitEnds[2];
 		for (int i = limitBegins[0]; i < limitEnds[0]; i++) {
-			if (yLimit == yLimitEnd || entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { break; }
-			if (yLimitEnd == 0 || entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimitEnd - 1]].position.y + entityHeap[yList[yLimitEnd - 1]].scale.x) { break; }
-			if (zLimit == zLimitEnd || entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z - entityHeap[zList[zLimit]].scale.x) { break; }
-			if (zLimitEnd == 0 || entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimitEnd - 1]].position.z + entityHeap[zList[zLimitEnd - 1]].scale.x) { break; }
+			if (yLimit == yLimitEnd || entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { continue; }
+			if (yLimitEnd == 0 || entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimitEnd - 1]].position.y + entityHeap[yList[yLimitEnd - 1]].scale.x) { continue; }
+			if (zLimit == zLimitEnd || entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z - entityHeap[zList[zLimit]].scale.x) { continue; }
+			if (zLimitEnd == 0 || entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimitEnd - 1]].position.z + entityHeap[zList[zLimitEnd - 1]].scale.x) { continue; }
 			//if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x < entityHeap[xList[xLimit]].position.x - entityHeap[xList[xLimit]].scale.x) { break; }
 			//if (entityHeap[xList[i]].position.x + entityHeap[xList[i]].scale.x > entityHeap[xList[xLimitEnd]].position.x + entityHeap[xList[xLimitEnd]].scale.x) { break; }
 			thing(xList[i]);
@@ -175,6 +175,14 @@ public:
 	}
 
 	void generateKDTreeNode(uint64_t thisIndex, uint64_t parentIndex, nmath::Vector3f boxPos, nmath::Vector3f boxSize, uint64_t limitBegins[3], uint64_t limitEnds[3], char dimension) {
+
+
+		/*if (entityHeap[xList[limitBegins[0]]].position.x == 0 && entityHeap[xList[limitEnds[0] - 1]].position.x == 0 &&
+			entityHeap[yList[limitBegins[1]]].position.y == 40 && entityHeap[yList[limitEnds[1] - 1]].position.y == 40 &&
+			entityHeap[zList[limitBegins[2]]].position.z == 0 && entityHeap[zList[limitEnds[2] - 1]].position.z == 40) {
+			DebugBreak();
+		}*/
+
 		int tryCounter = 0;
 		labelthing:
 			kdTreeNodeHeap[thisIndex].split = 0.5f;				// TODO: Make this be able to be variable in the rest of the code. Just support not cost calculations yet.
