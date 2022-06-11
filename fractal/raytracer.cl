@@ -238,6 +238,10 @@ inline uint4 sampleSkybox(float3 ray) {
 	return (uint4)(0, 255, 0, 255);
 }
 
+inline ulong removeDim(ulong input) {
+	return input & ~((ulong)11 << (sizeof(ulong) * 8 - 2));
+}
+
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
 						__global Entity* entityHeap, ulong entityHeapLength, float3 kdTreePosition, float3 kdTreeSize, __global KDTreeNode* kdTreeNodeHeap, ulong kdTreeNodeHeapLength, 
 						__global ulong* leafObjectHeap, ulong leafObjectHeapLength, 
@@ -252,6 +256,65 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 	float3 ray = (float3)(coords.x - (int)frameWidth / 2, -coords.y + (int)frameHeight / 2, -rayOriginZ);
 
 	ray = multiplyMatWithFloat3(cameraRotationMat, ray);
+
+
+float3 colorCollector;
+
+
+int lastCollidedWithObject = 100;
+for (int j = 0; j < 10; j++) {
+	float3 closestPoint;
+	float closestLength = 10000000;
+	int closestIndex = 0;
+	bool noHits = true;
+
+	for (int i = 0; i < entityHeapLength; i++) {
+		if (i == lastCollidedWithObject) { continue; }
+		bool didItHit = false;
+		float tthing;
+		float3 hitPoint = intersectWithSphere(cameraPos, ray, entityHeap[i].position, entityHeap[i].scale.x, &didItHit, &tthing);
+		if (didItHit) {
+			//write_imageui(frame, coords, (uint4)(255, 255, 0, 255)); return;
+			noHits = false;
+			if (tthing < closestLength) { closestPoint = hitPoint; closestIndex = i; closestLength = tthing;
+			}
+			//write_imageui(frame, coords, (uint4)(fabs(normal.x) * 255, fabs(normal.y) * 255, fabs(normal.z) * multiplier * 255, 1)); return;
+		}
+	}
+	if (!noHits) {
+
+			lastCollidedWithObject = closestIndex;
+			if (true) { 
+				
+			float3 normal = normalize(closestPoint - entityHeap[closestIndex].position);
+			float multiplier = fmax(dot(normal, (float3)(0, 1, 0)), 0);
+			//float multiplier = 1;
+			float3 color = (float3)(multiplier, multiplier, multiplier);
+			 colorCollector = color;
+	write_imageui(frame, coords, (uint4)(255 * fmin(colorCollector.x, 1), 255 * fmin(colorCollector.y, 1), 255 * fmin(colorCollector.z, 1), 255));
+	return;
+			 }
+
+			float3 normal = normalize(closestPoint - entityHeap[closestIndex].position);
+			//float multiplier = fmax(dot(normal, (float3)(0, 1, 0)), 0);
+			//float multiplier = 1;
+			//float3 color = (float3)(multiplier, multiplier, multiplier);
+			//colorCollector += color;
+
+			cameraPos = closestPoint;
+			float dotval = dot(ray, normal);
+			ray -= 2 * dotval * normal;
+			//colorCollector.z += 0.5f;
+
+		continue; }
+		else {
+			break;
+		}
+}
+	//write_imageui(frame, coords, (uint4)(fabs(ray.x) * 255, fabs(ray.y) * 255, fabs(ray.z) * 255, 1));
+
+
+
 
 	// TODO: Think about what checks you should do and what errors you should just let crash the system. Speed is key here.
 	if (entityHeapLength == 0 || kdTreeNodeHeapLength == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
@@ -273,105 +336,133 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == -1) {
 			// TODO: Write a better note for the following: NOTE: If no case is hit, program keeps executing, defined so that no weird behaviour happens. Basically as if default: break; were there.
-				switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+				switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
 				case 0:
-				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split), kdTreeSize.y, kdTreeSize.z);
 					leftKDTreeNodeSize = (float3)(kdTreeSize.x * kdTreeNodeHeap[currentKDTreeNodeIndex].split, kdTreeSize.y, kdTreeSize.z);
+				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split), kdTreeSize.y, kdTreeSize.z);
 					rightKDTreeNodePosition = (float3)(kdTreePosition.x + leftKDTreeNodeSize.x, kdTreePosition.y, kdTreePosition.z);
 					break;
 				case 1:
-				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split), kdTreeSize.z);
 					leftKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y * kdTreeNodeHeap[currentKDTreeNodeIndex].split, kdTreeSize.z);
+				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split), kdTreeSize.z);
 					rightKDTreeNodePosition = (float3)(kdTreePosition.x, kdTreePosition.y + leftKDTreeNodeSize.y, kdTreePosition.z);
 					break;
 				case 2:
-				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y, kdTreeSize.z * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split));
 					leftKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y, kdTreeSize.z * kdTreeNodeHeap[currentKDTreeNodeIndex].split);
+				 	rightKDTreeNodeSize = (float3)(kdTreeSize.x, kdTreeSize.y, kdTreeSize.z * (1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split));
 					rightKDTreeNodePosition = (float3)(kdTreePosition.x, kdTreePosition.y, kdTreePosition.z + leftKDTreeNodeSize.z);
 					break;
 				}
 				float rightDist = rayIntersectAABB(cameraPos, ray, rightKDTreeNodePosition, rightKDTreeNodePosition + rightKDTreeNodeSize);
 				if (rightDist == -1) {
-					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
+					if (previousKDTreeNodeIndex == removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex)) {
 						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						}
+		if (removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) == previousKDTreeNodeIndex) {
+			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
+			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			}
+		}
+		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
+		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
+		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
+		}
 					}
 					kdTreeSize = leftKDTreeNodeSize;
-					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
+					currentKDTreeNodeIndex = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					continue;
 				}
 				float leftDist = rayIntersectAABB(cameraPos, ray, kdTreePosition, kdTreePosition + rightKDTreeNodeSize);
 				if (leftDist == -1) {
-					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
+					if (previousKDTreeNodeIndex == removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + 1) {
 						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						}
+		if (removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) == previousKDTreeNodeIndex) {
+			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
+			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			}
+		}
+		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
+		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
+		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
+		}
 					}
 					kdTreePosition = rightKDTreeNodePosition;
 					kdTreeSize = rightKDTreeNodeSize;
-					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
+					currentKDTreeNodeIndex = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + 1;
 					continue;
 				}
 
 				if (leftDist < rightDist) {											// TODO: Is this or seperate if statements better? (branching versus boolean logic, which one is faster, does compiler automatically decide? It doesn't know the probabilities of variables being specific values and such though, how could it?).
-					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
+					if (previousKDTreeNodeIndex == removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex)) {
 						kdTreePosition = rightKDTreeNodePosition;
 						kdTreeSize = rightKDTreeNodeSize;
-						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
+						currentKDTreeNodeIndex = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + 1;
 						continue;
 					}            // NOTE: First parentIndex needs to be something other than the two child indices.
-					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
+					if (previousKDTreeNodeIndex == removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + 1) {
 						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-						case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
-						case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
-						case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
-						}
+		if (removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) == previousKDTreeNodeIndex) {
+			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
+			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			}
+		}
+		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
+		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
+		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
+		}
 					}
 					kdTreeSize = leftKDTreeNodeSize;				// TODO: This could be avoided by storing left... in kdTreeSize from getgo. It would need math to be done in the above switch case though, it might be more efficient that way given the probabilities, but I'm not sure, I sort of don't think so because of global illumination.
-					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
+					currentKDTreeNodeIndex = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					continue;
 				}
 
-					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1) {
+					if (previousKDTreeNodeIndex == removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + 1) {
 						kdTreeSize = leftKDTreeNodeSize;			// TODO: Again, this could be made more efficient as above, not sure about it though.
-						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex;
+						currentKDTreeNodeIndex = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 						continue;
 					}
-					if (previousKDTreeNodeIndex == kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) {
+					if (previousKDTreeNodeIndex == removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex)) {
 						if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
 						previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 						currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-						switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
-						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
-						}
+		if (removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) == previousKDTreeNodeIndex) {
+			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
+			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
+			}
+		}
+		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
+		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
+		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
+		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
+		}
 					}
 					kdTreePosition = rightKDTreeNodePosition;
 					kdTreeSize = rightKDTreeNodeSize;
-					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
+					currentKDTreeNodeIndex = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + 1;
 					continue;
 		}
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == 0) {
-			//write_imageui(frame, coords, (uint4)(255, 0, 0, 255));
+			//write_imageui(frame, coords, (uint4)((currentKDTreeNodeIndex * 100) % 256, 0, 0, 255));
 			//return;
 		}
-		for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
-			write_imageui(frame, coords, (uint4)(0, 0, fmin(1.0f, 1) * 255, 255));
+		for (ulong i = removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex); i < removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
+			write_imageui(frame, coords, (uint4)(0, 0, (currentKDTreeNodeIndex * 100) % 256, 255));
 			return;
 			//bool good = getRayColor(entityHeap[leafObjectHeap[i]]);
 			//if (good) { goto escapeWhileLoop; }
@@ -380,14 +471,14 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
 		previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 		currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-		if (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex == previousKDTreeNodeIndex) {
-			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+		if (removeDim(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) == previousKDTreeNodeIndex) {
+			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
 			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
 			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
 			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; continue;
 			}
 		}
-		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) - 2)) {
+		switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex >> (sizeof(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex) * 8 - 2)) {
 		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; continue;
 		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; continue;
 		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; continue;
@@ -415,7 +506,6 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 			}*/
 		}
 	}
-/*
 
 
 
@@ -429,69 +519,5 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
 
 
-int lastCollidedWithObject = 100;
-for (int j = 0; j < 10; j++) {
-	float3 closestPoint;
-	float closestLength = 10000000;
-	int closestIndex = 0;
-	bool noHits = true;
 
-	for (int i = 0; i < entityHeapLength; i++) {
-		if (i == lastCollidedWithObject) { continue; }
-		bool didItHit = false;
-		float tthing;
-		float3 hitPoint = intersectWithSphere(cameraPos, ray, entityHeap[i].position, entityHeap[i].scale.x, &didItHit, &tthing);
-		if (didItHit) {
-			//write_imageui(frame, coords, (uint4)(255, 255, 0, 255)); return;
-			noHits = false;
-			if (tthing < closestLength) { closestPoint = hitPoint; closestIndex = i; closestLength = tthing;
-			}
-			//write_imageui(frame, coords, (uint4)(fabs(normal.x) * 255, fabs(normal.y) * 255, fabs(normal.z) * multiplier * 255, 1)); return;
-		}
-	}
-	if (!noHits) {
-
-			lastCollidedWithObject = closestIndex;
-			if (closestIndex & 1) { 
-				
-			float3 normal = normalize(closestPoint - entityHeap[closestIndex].position);
-			bool free = true;
-			for (int k = 0; k < entityHeapLength; k++) {
-				if (k == closestIndex) { continue; }
-				bool thing = false;
-				float tthing;
-				intersectWithSphere(closestPoint, (float3)(0, 1, 0), entityHeap[k].position, entityHeap[k].scale.x, &thing, &tthing);
-				if (thing) { free = false; break; }
-			}
-			if (free) {
-			float multiplier = fmax(dot(normal, (float3)(0, 1, 0)), 0);
-			//float multiplier = 1;
-			float3 color = (float3)(multiplier, multiplier, multiplier);
-			colorCollector += color;
-			} else {
-				// nothing.
-			}
-			break;
-			 }
-
-			float3 normal = normalize(closestPoint - entityHeap[closestIndex].position);
-			//float multiplier = fmax(dot(normal, (float3)(0, 1, 0)), 0);
-			//float multiplier = 1;
-			//float3 color = (float3)(multiplier, multiplier, multiplier);
-			//colorCollector += color;
-
-			cameraPos = closestPoint;
-			float dotval = dot(ray, normal);
-			ray -= 2 * dotval * normal;
-			//colorCollector.z += 0.5f;
-
-		continue; }
-		else {
-			colorCollector.y += 1;
-			break;
-		}
-}
-	//write_imageui(frame, coords, (uint4)(fabs(ray.x) * 255, fabs(ray.y) * 255, fabs(ray.z) * 255, 1));
-	write_imageui(frame, coords, (uint4)(255 * fmin(colorCollector.x, 1), 255 * fmin(colorCollector.y, 1), 255 * fmin(colorCollector.z, 1), 1));
-	*/
 //}

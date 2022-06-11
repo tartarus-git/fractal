@@ -11,6 +11,12 @@
 
 #include <vector>
 
+#include "logging/debugOutput.h"
+
+#include <Windows.h>
+
+#include "nmath/vectors/Vector3f.h"
+
 class Scene {
 public:
 	Entity* entityHeap;
@@ -63,6 +69,11 @@ public:
 		zList = new (std::nothrow) uint64_t[entityHeapLength];
 
 		list = new (std::nothrow) uint64_t[entityHeapLength * 3];
+
+		if (!(xList && yList && zList && list)) {
+			debuglogger::out << "failed to allocate one of the sort lists\n";
+			DebugBreak();
+		}
 
 		for (int i = 0; i < entityHeapLength; i++) {
 			xList[i] = i;
@@ -136,11 +147,11 @@ public:
 		uint64_t& yLimitEnd = limitEnds[1];
 		uint64_t& xLimitEnd = limitEnds[0];
 		uint64_t& zLimitEnd = limitEnds[2];
-		for (int i = limitBegins[0]; i <= limitEnds[0]; i++) {
-			if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { break; }
-			if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimitEnd]].position.y + entityHeap[yList[yLimitEnd]].scale.x) { break; }
-			if (entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z - entityHeap[zList[zLimit]].scale.x) { break; }
-			if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimitEnd]].position.z + entityHeap[zList[zLimitEnd]].scale.x) { break; }
+		for (int i = limitBegins[0]; i < limitEnds[0]; i++) {
+			if (yLimit == yLimitEnd || entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y - entityHeap[yList[yLimit]].scale.x) { break; }
+			if (yLimitEnd == 0 || entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimitEnd - 1]].position.y + entityHeap[yList[yLimitEnd - 1]].scale.x) { break; }
+			if (zLimit == zLimitEnd || entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z - entityHeap[zList[zLimit]].scale.x) { break; }
+			if (zLimitEnd == 0 || entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimitEnd - 1]].position.z + entityHeap[zList[zLimitEnd - 1]].scale.x) { break; }
 			//if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x < entityHeap[xList[xLimit]].position.x - entityHeap[xList[xLimit]].scale.x) { break; }
 			//if (entityHeap[xList[i]].position.x + entityHeap[xList[i]].scale.x > entityHeap[xList[xLimitEnd]].position.x + entityHeap[xList[xLimitEnd]].scale.x) { break; }
 			thing(xList[i]);
@@ -153,12 +164,13 @@ public:
 			Entity& entity = entityHeap[list[i * 3 + dimension]];
 			if (entity.position[dimension] + entity.scale.x >= absoluteSplice) { limitBegins[dimension] = i; return; }
 		}
+		limitBegins[dimension] = limitEnds[dimension];
 	}
 
 	void cutAtSpliceOtherDir(float absoluteSplice, char dimension, uint64_t limitBegins[3], uint64_t limitEnds[3]) {
 		for (uint64_t i = limitBegins[dimension]; i < limitEnds[dimension]; i++) {
 			Entity& entity = entityHeap[list[i * 3 + dimension]];
-			if (entity.position[dimension] - entity.scale.x > absoluteSplice) { limitEnds[dimension] = i - 1; return; }
+			if (entity.position[dimension] - entity.scale.x > absoluteSplice) { limitEnds[dimension] = i; return; }
 		}
 	}
 
@@ -170,26 +182,33 @@ public:
 			kdTreeNodeHeap[thisIndex].objectCount = -1;
 			uint64_t leftAmount = 0;
 			uint64_t rightLimitBegins[] = { limitBegins[0], limitBegins[1], limitBegins[2] };
-			cutAtSplice(kdTreeNodeHeap[thisIndex].split * boxSize[dimension] + boxPos[dimension], dimension, rightLimitBegins, limitEnds);			// TODO: Turn to absolute.
+			cutAtSplice(kdTreeNodeHeap[thisIndex].split * boxSize[dimension] + boxPos[dimension], dimension, rightLimitBegins, limitEnds);
 			doThisThingForEveryObjectInRange([&amount = leftAmount](uint64_t i) { amount++; }, dimension, rightLimitBegins, limitEnds);
 			uint64_t rightAmount = 0;
 			uint64_t leftLimitEnds[] = { limitEnds[0], limitEnds[1], limitEnds[2] };
 			cutAtSpliceOtherDir(kdTreeNodeHeap[thisIndex].split * boxSize[dimension] + boxPos[dimension], dimension, limitBegins, leftLimitEnds);
 			doThisThingForEveryObjectInRange([&amount = rightAmount](uint64_t i) { amount++; }, dimension, limitBegins, leftLimitEnds);
-			if (leftAmount == rightAmount) {				// We're at a leaf.
+			uint64_t totalAmount = 0;
+			doThisThingForEveryObjectInRange([&amount = totalAmount](uint64_t i) { amount++; }, dimension, limitBegins, limitEnds);
+			if (leftAmount == totalAmount && rightAmount == totalAmount) {				// We're at a leaf.
+				if (totalAmount != 0) {
+					//DebugBreak();
+				}
 				if (tryCounter < 2) {
 					tryCounter++;
 					dimension = (dimension + 1) % 3;
 					goto labelthing;
 				}
 				kdTreeNodeHeap[thisIndex].childrenIndex = leafObjectHeap.size();
-				kdTreeNodeHeap[thisIndex].objectCount = rightAmount;
+				kdTreeNodeHeap[thisIndex].childrenIndex |= (uint64_t)dimension << (sizeof(uint64_t) * 8 - 2);
+				kdTreeNodeHeap[thisIndex].objectCount = totalAmount;
 				doThisThingForEveryObjectInRange([&](uint64_t i) { leafObjectHeap.push_back(i); }, dimension, limitBegins, limitEnds);
 				return;
 			}
 
 			// SIDE-NOTE: Write about the weird behaviour of switch cases and that if no case is inside, no statement is executed. See that one construct on wikipedia for inspiration.
 			kdTreeNodeHeap[thisIndex].childrenIndex = kdTreeNodeHeap.size();
+			kdTreeNodeHeap[thisIndex].childrenIndex |= (uint64_t)dimension << (sizeof(uint64_t) * 8 - 2);
 
 			kdTreeNodeHeap.push_back(KDTreeNode());
 			kdTreeNodeHeap.push_back(KDTreeNode());
@@ -204,6 +223,10 @@ public:
 	}
 
 	void generateKDTree() {
+
+		kdTree.position = nmath::Vector3f(10000, 1000000, 1000000);
+		kdTree.size = nmath::Vector3f(-10000, -1000000, -1000000);
+
 		for (uint64_t i = 0; i < entityHeapLength; i++) {
 			float entityLowestValue = entityHeap[i].position.x - entityHeap[i].scale.x;
 			if (entityLowestValue < kdTree.position.x) { kdTree.position.x = entityLowestValue; }
@@ -214,18 +237,18 @@ public:
 		}
 		for (uint64_t i = 0; i < entityHeapLength; i++) {
 			float entityLowestValue = entityHeap[i].position.x + entityHeap[i].scale.x;
-			if (entityLowestValue > kdTree.size.x) { kdTree.size.x = entityLowestValue - kdTree.position.x; }
+			if (entityLowestValue > kdTree.size.x + kdTree.position.x) { kdTree.size.x = entityLowestValue - kdTree.position.x; }
 			entityLowestValue = entityHeap[i].position.y + entityHeap[i].scale.x;
-			if (entityLowestValue > kdTree.size.y) { kdTree.size.y = entityLowestValue - kdTree.position.y; }
+			if (entityLowestValue > kdTree.size.y + kdTree.position.y) { kdTree.size.y = entityLowestValue - kdTree.position.y; }
 			entityLowestValue = entityHeap[i].position.z + entityHeap[i].scale.x;
-			if (entityLowestValue > kdTree.size.z) { kdTree.size.z = entityLowestValue - kdTree.position.z; }
+			if (entityLowestValue > kdTree.size.z + kdTree.position.z) { kdTree.size.z = entityLowestValue - kdTree.position.z; }
 		}
 
 		createSortedLists();
 
 		kdTreeNodeHeap.push_back(KDTreeNode());
 		uint64_t limitBegins[] = { 0, 0, 0 };
-		uint64_t limitEnds[] = { entityHeapLength - 1, entityHeapLength - 1, entityHeapLength - 1 };
+		uint64_t limitEnds[] = { entityHeapLength, entityHeapLength, entityHeapLength };
 		generateKDTreeNode(0, -1, kdTree.position, kdTree.size, limitBegins, limitEnds, 0);
 
 		releaseSortedLists();
@@ -234,5 +257,5 @@ public:
 
 
 
-	constexpr ~Scene() { delete[] entityHeap; delete[] lightHeap; }
+	constexpr ~Scene() { delete[] entityHeap; delete[] lightHeap; /* TODO: Delete the rest of the stuff too. */ }
 };

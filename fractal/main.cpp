@@ -149,7 +149,7 @@ void graphicsLoop() {
 	Scene mainScene(10, 5);
 	for (int i = 0; i < 10; i++) {
 		Entity entity;
-		entity.position = nmath::Vector3f(rand() % 1000, 0, rand() % 1000);
+		entity.position = nmath::Vector3f(rand() % 1000, rand() % 1000, rand() % 1000);
 		entity.scale = nmath::Vector3f(10, 0, 0);
 		mainScene.entityHeap[i] = entity;
 	}
@@ -159,8 +159,8 @@ void graphicsLoop() {
 		light.color = nmath::Vector3f(1, 1, 1);
 		mainScene.lightHeap[i] = light;
 	}
-	mainScene.entityHeap[1].position = nmath::Vector3f(500, -1000, 500);
-	mainScene.entityHeap[1].scale = nmath::Vector3f(1000, 0, 0);
+	//mainScene.entityHeap[1].position = nmath::Vector3f(500, -1000, 500);
+	//mainScene.entityHeap[1].scale = nmath::Vector3f(1000, 0, 0);
 
 	mainScene.generateKDTree();
 
