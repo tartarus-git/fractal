@@ -130,6 +130,72 @@ void updateWindowSizeVars() {
 
 #define EXIT_FROM_THREAD POST_THREAD_EXIT; goto releaseAndReturn;
 
+/*
+* 
+* SIDE-NOTE: Exception handling is pretty complicated, but the basics of
+* what you should know are this:
+*	- C++ exceptions on Windows are based on SEH exceptions.
+*	- SEH exceptions predate C++ exceptions and are facilitated through
+*		Windows syscalls.
+*		- This is important: SEH exceptions have nothing to do with the compiler or the code generation or anything,
+*			they're just syscalls and the assorted structures and such. So basically you don't have to have any sort
+*			of exceptions turned on to write and use SEH exceptions.
+*			
+*			- They are kind of more low-tech than the exceptions that you're used to, they don't natively support
+*				try/except behaviour, since they don't do any stack unwinding or anything.
+*			- Basically, what you can do with them is have a linked list of exception handlers that get traversed
+*				by the OS (because it goes from handlers corresponding to inner-most scope to handlers for outer scopes
+				(like you would for try/except)). OS finds the first exception handler that handles the exception
+				and calls it. That handler is your code, so you can do whatever you want.
+				The problem is you normally only have two options, either continue the search after doing whatever it is you
+				did (that tells OS that the exception isn't handled and it needs to keep going up through handlers) or
+				restart execution at the source of the exception (before the instruction that caused the exception).
+
+		- Windows also has compiler extentions for C and C++ that put in the keywords __try, __except, __finally.
+			- This actually DOES do stack unwinding via code that is generated on top of the basic win32 API stuff.
+			- Here, things basically work as you'd expect since stack unwinding and such is present.
+			- How do they implement it? It's actually kind of beautiful, but also complicated, so I'm not going to explain
+				all too much here. Basically, instead of telling the OS to either continue search or restart
+				(which is handled through the return value of the handler function), the handler function just never returns.
+				The compiler generated code in the SEH exception handler unwinds the stack like it should, and then just
+				jumps into the code for the except block straight from the handler. I don't remember the exact
+				specifics of how this works myself, but AFAIK, the except block then just jumps to the normal code that comes
+				after it when it's finished, like an except block would behave normally.
+				What this means is that you've sort of made your whole program part of your handler.
+				You might think this could cause stack overflow since it's basically recursion, but it doesn't since
+				we unwind the stack before we do this, making it all work out.
+				Because the stack is unwinded and the stack frame of the handler itself it gone as well, you can't really
+				count yourself as in the handler anymore either, but it's sort of fun to think about it that way.
+
+
+	- C++ exceptions are an abstraction on top of the SEH exceptions, since C++ exceptions are cross-platform.
+		This obviously means that the implementation of C++ exceptions changes from platform to platform, only in Windows
+		can they be handled through SEH.
+		In that case though, they are pretty simple, they basically just do the same stack unwinding stuff that the
+		language extentions above did, but with standardized keywords. The other difference is that they
+		automatically put in try/finally blocks whenever you initialize local variables, since those definitely need to
+		get destructed, even if an exception is thrown. This actually also gets done with the SEH language extentions,
+		at least for me in visual studio.
+
+
+	IMPORTANT: For a lot of new architectures, turning on exceptions has no cost until you put in exception handling code or
+		until an exception is thrown. THIS ISN'T TRUE FOR x86-32. Here, every function needs to do some initialization at
+		the top of it's code block and there is still overhead, even if you don't actually use exceptions. Since we never use
+		exceptions, I've turned them off for this project, even if the overhead is relatively small.
+
+	IMPORTANT: Does the above note mean that system exceptions such as div by zero, nullptr dereference, stack overflow, etc...
+	won't reach us anymore? Won't that be bad for debugging, since we won't know why our program failed?
+	No, everything will still work fine, the reason is this:
+		- Exceptions such as those generate SEH exceptions, just like any other exception on Windows, but just because we
+		don't handle them with compiler generated code doesn't mean they are not there. You can't turn them off, they are part
+		of the OS.
+		- The OS will look for handlers, but since we haven't registered any, the exception won't get handled. Our program will
+		crash.
+		- UNLESS a debugger is attached. A debugger can register it's own handler and use it to extract data about the exception,
+		which it can then show us. This technically has the overhead of exceptions, but that isn't a problem since it happens
+		once at the end of our programs lifetime. Considering that, it's actually a splendid use of the system.
+* 
+*/
 
 void graphicsLoop() {
 	updateWindowSizeVars();
