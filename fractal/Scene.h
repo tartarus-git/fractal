@@ -208,65 +208,68 @@ public:
 	std::vector<uint64_t> leafObjectHeap;
 
 	template <typename Lambda>
-	void doThisThingForEveryObjectInRange(Lambda thing, char dimension, uint64_t limitBegins[6], uint64_t limitEnds[6]) {
+	void doThisThingForEveryObjectInRange(Lambda thing, char dimension, uint64_t limitBegins[6], uint64_t limitEnds[6], nmath::Vector3f boxPos, nmath::Vector3f boxSize) {
 		uint64_t& yLimit = limitBegins[1];
 		uint64_t& xLimit = limitBegins[0];
 		uint64_t& zLimit = limitBegins[2];
 
-		uint64_t& yLimitR = limitBegins[1];
-		uint64_t& xLimitR = limitBegins[0];
-		uint64_t& zLimitR = limitBegins[2];
+		uint64_t& yLimitR = limitBegins[4];
+		uint64_t& xLimitR = limitBegins[3];
+		uint64_t& zLimitR = limitBegins[5];
 
 		uint64_t& yLimitEnd = limitEnds[1];
 		uint64_t& xLimitEnd = limitEnds[0];
 		uint64_t& zLimitEnd = limitEnds[2];
 
-		uint64_t& yLimitEndR = limitEnds[1];
-		uint64_t& xLimitEndR = limitEnds[0];
-		uint64_t& zLimitEndR = limitEnds[2];
+		uint64_t& yLimitEndR = limitEnds[4];
+		uint64_t& xLimitEndR = limitEnds[3];
+		uint64_t& zLimitEndR = limitEnds[5];
 
-		if ((yLimit == yLimitEnd && yLimitR == yLimitEndR) || (zLimit == zLimitEnd && zLimitR == zLimitEndR)) { return; }
-		// TODO: I think the above is too simple, also we're causing stackoverflow with the current setup. Why?
-
+		// TODO: Optimization: check the span of the limits for each dimension and choose the smallest span for the for loops below, that way, you have to do the least
+		//		amount of checks.
 		for (int i = limitBegins[0]; i < limitEnds[0]; i++) {
-			if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x < entityHeap[yList[yLimit]].position.y + entityHeap[yList[yLimit]].scale.x) { continue; }
-			if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x > entityHeap[yListR[yLimitEndR - 1]].position.y - entityHeap[yListR[yLimitEndR - 1]].scale.x) { continue; }
-			if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z + entityHeap[zList[zLimit]].scale.x) { continue; }
-			if (entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x > entityHeap[zListR[zLimitEndR - 1]].position.z - entityHeap[zListR[zLimitEndR - 1]].scale.x) { continue; }
+			if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x < boxPos.y) { continue; }
+			if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x > boxPos.y + boxSize.y) { continue; }
+			if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x < boxPos.z) { continue; }
+			if (entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x > boxPos.z + boxSize.z) { continue; }
 
-			if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x == entityHeap[xListR[i]].position.x - entityHeap[xListR[i]].scale.x) { break; }
+			if (xLimitR != xLimitEndR && entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x >= entityHeap[xListR[xLimitR]].position.x - entityHeap[xListR[xLimitR]].scale.x) { continue; }
+
+			thing(xList[i]);
+		}
+		// TODO: This has to look through potentially many objects, ways to improve:
+		//	- You could see if limitEnds[0] is closer to entityHeapLength or limitBegins[3] is closer to 0 and choose the closer one and traverse in outwards
+		//		direction from that one while checking for overarching AABB's. That would cut your average search space from 1/2 of all objects to 1/4 of all objects.
+		//	- That's still a lot though, there has to be a way to not search through any really big number of objects, akin to how we do the limitBegins and limitEnds
+		//		stuff.
+		for (int i = limitEnds[0]; i < entityHeapLength; i++) {
+			if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x >= boxPos.x) { continue; }
+
+			if (entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x < boxPos.y) { continue; }
+			if (entityHeap[xList[i]].position.y - entityHeap[xList[i]].scale.x > boxPos.y + boxSize.y) { continue; }
+			if (entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x < boxPos.z) { continue; }
+			if (entityHeap[xList[i]].position.z - entityHeap[xList[i]].scale.x > boxPos.z + boxSize.z) { continue; }
 
 			thing(xList[i]);
 		}
 		for (int i = xLimitR; i < xLimitEndR; i++) {
-			if (entityHeap[xListR[i]].position.y + entityHeap[xListR[i]].scale.x < entityHeap[yList[yLimit]].position.y + entityHeap[yList[yLimit]].scale.x) { continue; }
-			if (entityHeap[xListR[i]].position.y - entityHeap[xListR[i]].scale.x > entityHeap[yListR[yLimitEndR - 1]].position.y - entityHeap[yListR[yLimitEndR - 1]].scale.x) { continue; }
-			if (entityHeap[xListR[i]].position.z + entityHeap[xListR[i]].scale.x < entityHeap[zList[zLimit]].position.z + entityHeap[zList[zLimit]].scale.x) { continue; }
-			if (entityHeap[xListR[i]].position.z - entityHeap[xListR[i]].scale.x > entityHeap[zListR[zLimitEndR - 1]].position.z - entityHeap[zListR[zLimitEndR - 1]].scale.x) { continue; }
+			if (entityHeap[xListR[i]].position.y + entityHeap[xListR[i]].scale.x < boxPos.y) { continue; }
+			if (entityHeap[xListR[i]].position.y - entityHeap[xListR[i]].scale.x > boxPos.y + boxSize.y) { continue; }
+			if (entityHeap[xListR[i]].position.z + entityHeap[xListR[i]].scale.x < boxPos.z) { continue; }
+			if (entityHeap[xListR[i]].position.z - entityHeap[xListR[i]].scale.x > boxPos.z + boxSize.z) { continue; }
 
-			thing(xList[i]);
+			thing(xListR[i]);
 		}
-
-		return;
-
-		/*for (int i = limitBegins[0]; i < limitEnds[0]; i++) {
-			if (yLimitR == yLimitEndR || entityHeap[xListR[i]].position.y - entityHeap[xList[i]].scale.x < entityHeap[yListR[yLimitR]].position.y - entityHeap[yListR[yLimitR]].scale.x) { continue; }
-			if (yLimitEnd == 0 || entityHeap[xList[i]].position.y + entityHeap[xList[i]].scale.x > entityHeap[yList[yLimitEnd - 1]].position.y + entityHeap[yList[yLimitEnd - 1]].scale.x) { continue; }
-			if (zLimit == zLimitEnd || entityHeap[xListR[i]].position.z - entityHeap[xList[i]].scale.x < entityHeap[zList[zLimit]].position.z - entityHeap[zList[zLimit]].scale.x) { continue; }
-			if (zLimitEnd == 0 || entityHeap[xList[i]].position.z + entityHeap[xList[i]].scale.x > entityHeap[zList[zLimitEnd - 1]].position.z + entityHeap[zList[zLimitEnd - 1]].scale.x) { continue; }
-			//if (entityHeap[xList[i]].position.x - entityHeap[xList[i]].scale.x < entityHeap[xList[xLimit]].position.x - entityHeap[xList[xLimit]].scale.x) { break; }
-			//if (entityHeap[xList[i]].position.x + entityHeap[xList[i]].scale.x > entityHeap[xList[xLimitEnd]].position.x + entityHeap[xList[xLimitEnd]].scale.x) { break; }
-			thing(xList[i]);
-		}*/
 	}
 
 	// TODO: Use templates to create three different functions that operate on the 3 different dimensions, instead of doing this weird and inefficient indexing stuff.
 	void cutAtSplice(float absoluteSplice, char dimension, uint64_t limitBegins[6], uint64_t limitEnds[6]) {
 		for (uint64_t i = limitBegins[dimension]; i < limitEnds[dimension]; i++) {
 			Entity& entity = entityHeap[list[i * 3 + dimension]];
-			if (entity.position[dimension] + entity.scale.x >= absoluteSplice) { limitBegins[dimension] = i; return; }
+			if (entity.position[dimension] + entity.scale.x >= absoluteSplice) { limitBegins[dimension] = i; goto firstlabel; }
 		}
 		limitBegins[dimension] = limitEnds[dimension];
+	firstlabel:
 
 		for (uint64_t i = limitBegins[dimension + 3]; i < limitEnds[dimension + 3]; i++) {
 			Entity& entity = entityHeap[listR[i * 3 + dimension]];
@@ -278,7 +281,7 @@ public:
 	void cutAtSpliceOtherDir(float absoluteSplice, char dimension, uint64_t limitBegins[6], uint64_t limitEnds[6]) {
 		for (uint64_t i = limitBegins[dimension + 3]; i < limitEnds[dimension + 3]; i++) {
 			Entity& entity = entityHeap[listR[i * 3 + dimension]];
-			if (entity.position[dimension] - entity.scale.x > absoluteSplice) { limitEnds[dimension + 3] = i; return; }
+			if (entity.position[dimension] - entity.scale.x > absoluteSplice) { limitEnds[dimension + 3] = i; break; }
 		}
 
 		for (uint64_t i = limitBegins[dimension]; i < limitEnds[dimension]; i++) {
@@ -296,11 +299,11 @@ public:
 			DebugBreak();
 		}*/
 
-		if (boxPos.x == kdTree.position.x && boxSize.x == kdTree.size.x / 2 &&
+		/*if (boxPos.x == kdTree.position.x && boxSize.x == kdTree.size.x / 2 &&
 			boxPos.y == kdTree.position.y && boxSize.y == kdTree.size.y / 2 &&
 			boxPos.z == kdTree.position.z + boxSize.z && boxSize.z == kdTree.size.z / 2) {
 			DebugBreak();
-		}
+		}*/
 
 		int tryCounter = 0;
 		labelthing:
@@ -310,13 +313,19 @@ public:
 			uint64_t leftAmount = 0;
 			uint64_t rightLimitBegins[] = { limitBegins[0], limitBegins[1], limitBegins[2], limitBegins[3], limitBegins[4], limitBegins[5] };
 			cutAtSplice(kdTreeNodeHeap[thisIndex].split * boxSize[dimension] + boxPos[dimension], dimension, rightLimitBegins, limitEnds);
-			doThisThingForEveryObjectInRange([&amount = leftAmount](uint64_t i) { amount++; }, dimension, rightLimitBegins, limitEnds);
+			nmath::Vector3f thingBoxPos = boxPos;
+			thingBoxPos[dimension] += kdTreeNodeHeap[thisIndex].split * boxSize[dimension];
+			nmath::Vector3f thingBoxSize = boxSize;
+			thingBoxSize[dimension] = boxSize[dimension] * (1 - kdTreeNodeHeap[thisIndex].split);
+			doThisThingForEveryObjectInRange([&amount = leftAmount](uint64_t i) { amount++; }, dimension, rightLimitBegins, limitEnds, thingBoxPos, thingBoxSize);
 			uint64_t rightAmount = 0;
 			uint64_t leftLimitEnds[] = { limitEnds[0], limitEnds[1], limitEnds[2], limitEnds[3], limitEnds[4], limitEnds[5] };
 			cutAtSpliceOtherDir(kdTreeNodeHeap[thisIndex].split * boxSize[dimension] + boxPos[dimension], dimension, limitBegins, leftLimitEnds);
-			doThisThingForEveryObjectInRange([&amount = rightAmount](uint64_t i) { amount++; }, dimension, limitBegins, leftLimitEnds);
+			thingBoxSize = boxSize;
+			thingBoxSize[dimension] = kdTreeNodeHeap[thisIndex].split * boxSize[dimension];
+			doThisThingForEveryObjectInRange([&amount = rightAmount](uint64_t i) { amount++; }, dimension, limitBegins, leftLimitEnds, boxPos, thingBoxSize);
 			uint64_t totalAmount = 0;
-			doThisThingForEveryObjectInRange([&amount = totalAmount](uint64_t i) { amount++; }, dimension, limitBegins, limitEnds);
+			doThisThingForEveryObjectInRange([&amount = totalAmount](uint64_t i) { amount++; }, dimension, limitBegins, limitEnds, boxPos, boxSize);
 			if (leftAmount == totalAmount && rightAmount == totalAmount) {				// We're at a leaf.
 				if (totalAmount != 0) {
 					//DebugBreak();
@@ -329,7 +338,7 @@ public:
 				kdTreeNodeHeap[thisIndex].childrenIndex = leafObjectHeap.size();
 				kdTreeNodeHeap[thisIndex].childrenIndex |= (uint64_t)dimension << (sizeof(uint64_t) * 8 - 2);
 				kdTreeNodeHeap[thisIndex].objectCount = totalAmount;
-				doThisThingForEveryObjectInRange([&](uint64_t i) { leafObjectHeap.push_back(i); }, dimension, limitBegins, limitEnds);
+				doThisThingForEveryObjectInRange([&](uint64_t i) { leafObjectHeap.push_back(i); }, dimension, limitBegins, limitEnds, boxPos, boxSize);
 				return;
 			}
 
