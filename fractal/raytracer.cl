@@ -275,7 +275,8 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 								} \
 							}
 
-#define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; write_imageui(frame, coords, (uint4)(fmin(colorSum.x, 1) * 255, fmin(colorSum.y, 1) * 255, fmin(colorSum.z, 1) * 255, 255))
+//#define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; write_imageui(frame, coords, (uint4)(fmin(colorSum.x, 1) * 255, fmin(colorSum.y, 1) * 255, fmin(colorSum.z, 1) * 255, 255))
+#define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; renderColorSum += colorSum;
 
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, 
 						float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
@@ -289,6 +290,14 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 	int x = get_global_id(0);
 	if (x >= frameWidth) { return; }
 	int2 coords = (int2)(x, get_global_id(1));
+
+	float3 renderColorSum = (float3)(0, 0, 0);
+
+	float3 cameraBackup = cameraPos;
+
+// TODO: Figure out a way to measure variance between the samples and a way to conditionally add more samples to the mix.
+for (int indexthing = 0; indexthing < 4; indexthing++) {
+	cameraPos = cameraBackup;
 
 	float3 ray = (float3)(coords.x - (int)frameWidth / 2 + randFloat(), -coords.y + (int)frameHeight / 2 - randFloat(), -rayOriginZ);
 	ray = normalize(ray);
@@ -431,7 +440,7 @@ upwardsTraversalLoop:
 
 			if (rightDist == -1) {
 				if (previousKDTreeNodeIndex == noDimChildrenIndex) {
-					if (currentKDTreeNodeIndex == 0) { RENDER; return; }
+					if (currentKDTreeNodeIndex == 0) { RENDER; break; }
 
 					previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -460,7 +469,7 @@ upwardsTraversalLoop:
 
 			if (leftDist == -1) {
 				if (previousKDTreeNodeIndex == noDimChildrenIndex + 1) {			// TODO: Store in variable?
-					if (currentKDTreeNodeIndex == 0) { RENDER; return; }
+					if (currentKDTreeNodeIndex == 0) { RENDER; break; }
 
 					previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -508,7 +517,7 @@ upwardsTraversalLoop:
 					continue;
 				}
 				if (previousKDTreeNodeIndex == noDimChildrenIndex + 1) {
-					if (currentKDTreeNodeIndex == 0) { RENDER; return; }
+					if (currentKDTreeNodeIndex == 0) { RENDER; break; }
 
 					previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -533,7 +542,7 @@ upwardsTraversalLoop:
 				continue;
 			}
 			if (previousKDTreeNodeIndex == noDimChildrenIndex) {
-				if (currentKDTreeNodeIndex == 0) { RENDER; return; }
+				if (currentKDTreeNodeIndex == 0) { RENDER; break; }
 
 				previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 				currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -598,7 +607,7 @@ upwardsTraversalLoop:
 					maxBounces--;
 				} else {
 					RENDER;
-					return;
+					break;
 				}
 			}
 		}
@@ -610,4 +619,7 @@ upwardsTraversalLoop:
 		RECONSTRUCT_PARENT;
 		goto upwardsTraversalLoop;
 	}
+}
+renderColorSum /= 4;
+write_imageui(frame, coords, (uint4)(fmin(renderColorSum.x, 1) * 255, fmin(renderColorSum.y, 1) * 255, fmin(renderColorSum.z, 1) * 255, 255));
 }
