@@ -1,5 +1,6 @@
 typedef struct Material {
 	float3 color;
+	float reflectivity;
 } Material;
 
 typedef struct Entity {
@@ -274,7 +275,7 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 								} \
 							}
 
-#define RENDER write_imageui(frame, coords, (uint4)(fmin(colorCollector.x, 1) * 255, fmin(colorCollector.y, 1) * 255, fmin(colorCollector.z, 1) * 255, 255))
+#define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; write_imageui(frame, coords, (uint4)(fmin(colorSum.x, 1) * 255, fmin(colorSum.y, 1) * 255, fmin(colorSum.z, 1) * 255, 255))
 
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, 
 						float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
@@ -289,7 +290,8 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 	if (x >= frameWidth) { return; }
 	int2 coords = (int2)(x, get_global_id(1));
 
-	float3 ray = (float3)(coords.x - (int)frameWidth / 2, -coords.y + (int)frameHeight / 2, -rayOriginZ);
+	float3 ray = (float3)(coords.x - (int)frameWidth / 2 + randFloat(), -coords.y + (int)frameHeight / 2 - randFloat(), -rayOriginZ);
+	ray = normalize(ray);
 	ray = multiplyMatWithFloat3(cameraRotationMat, ray);
 /*
 float3 colorCollector;
@@ -363,8 +365,9 @@ for (int j = 0; j < 10; j++) {
 	char splitDimension = extractDimensionValue(kdTreeNodeHeap[0].childrenIndex);
 	ulong noDimChildrenIndex = 1;					// NOTE: It follows from this, that the first child of the first node MUST BE LOCATED AT INDEX 1.
 
-	float3 colorCollector = (float3)(1, 1, 1);
-	char maxBounces = 10;
+	float3 colorSum = (float3)(0, 0, 0);
+	float3 colorProduct = (float3)(1, 1, 1);
+	char maxBounces = 10;			// TODO: Handle this through parameter.
 
 	while (true) {
 
@@ -555,8 +558,7 @@ upwardsTraversalLoop:
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount != 0) {
 			float closestDistance = -1;
 			float3 closestHitPoint;
-			float3 closestColor;
-			float3 closestEntityPosition;
+			ulong closestEntityIndex;
 			for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
 				//write_imageui(frame, coords, (uint4)(0, 0, (currentKDTreeNodeIndex * 100) % 256, 255));
 				//return;
@@ -573,25 +575,25 @@ upwardsTraversalLoop:
 					if (closestDistance == -1 || dist < closestDistance) {
 						closestDistance = dist;
 						closestHitPoint = hitPoint;
-						closestEntityPosition = entityHeap[leafObjectHeap[i]].position;
-						closestColor = (float3)(0.8f, 0.8f, 0.8f);
+						closestEntityIndex = leafObjectHeap[i];
 					}
 				}
 			}
 			if (closestDistance != -1) {
-				colorCollector *= closestColor;
 				if (maxBounces > 0) {
-					if (closestEntityPosition.x == 500) {
-					ray = (float3)(randFloat() * 2 - 1, randFloat() * 2 - 1, randFloat() * 2 - 1);
+					colorProduct *= materialHeap[entityHeap[closestEntityIndex].material].color;
+					// TODO: Add point lights somehow. You need to traverse the kd tree for them, which is problematic.
+					colorSum += 0 * colorProduct;
+					float3 normal = normalize(closestHitPoint - entityHeap[closestEntityIndex].position);
+					float dotIncomingRayNormal = dot(ray, normal);			// NOTE: Assumes ray is normalized.
+					float3 reflectedRay = ray - dotIncomingRayNormal * 2 * normal;
+					float3 diffuseRay = (float3)(randFloat() * 2 - 1, randFloat() * 2 - 1, randFloat() * 2 - 1);
+					diffuseRay = normalize(diffuseRay);
+					float dotUnadjustedDiffuseRayNormal = dot(diffuseRay, normal);
+					if (dotUnadjustedDiffuseRayNormal < 0) { diffuseRay -= dotUnadjustedDiffuseRayNormal * 2 * normal; }
+					float3 diffReflectedDiffuse = reflectedRay - diffuseRay;
+					ray = diffuseRay + diffReflectedDiffuse * materialHeap[entityHeap[closestEntityIndex].material].reflectivity;
 					ray = normalize(ray);
-					float3 normal = normalize(closestHitPoint - closestEntityPosition);
-					float dotProd = dot(normal, ray);
-					if (dotProd < 0) { ray -= dotProd * normal * 2; }
-					} else {
-						float3 normal = normalize(closestHitPoint - closestEntityPosition);
-						float dotProd = dot(normal, ray);
-						ray -= dotProd * normal * 2;
-					}
 					cameraPos = closestHitPoint;
 					maxBounces--;
 				} else {

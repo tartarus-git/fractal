@@ -2,6 +2,9 @@
 
 #include "nmath/vectors/Vector3f.h"
 
-struct alignas(16) Material {
+#include <cstdint>
+
+struct Material {
 	nmath::Vector3f color;
+	alignas(16) float reflectivity;
 };

@@ -204,7 +204,7 @@ void graphicsLoop() {
 	debuglogger::out << alignof(uint64_t) << '\n';
 
 	DefaultShader mainShader;
-	ErrorCode err = Renderer::init(&mainShader, 5, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
+	ErrorCode err = Renderer::init(&mainShader, 4, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
 	debuglogger::out << (int16_t)err << '\n';
 	Camera camera({ 500, 5, 515 }, { 0, 0, 0 }, 90);
 	Renderer::loadCamera(camera);
@@ -227,6 +227,7 @@ void graphicsLoop() {
 				Entity entity;
 				entity.position = nmath::Vector3f(500, 11, 500);
 				entity.scale = nmath::Vector3f(10, 0, 0);
+				entity.material = 0;
 				mainScene.entityHeap[i] = entity;
 	}
 	for (int i = 0; i < 5; i++) {
@@ -243,6 +244,8 @@ void graphicsLoop() {
 	Renderer::loadScene(std::move(mainScene));
 
 	ResourceHeap resources(0, 1);
+	resources.materialHeap[0].color = nmath::Vector3f(0.8f, 0.8f, 0.8f);
+	resources.materialHeap[0].reflectivity = 0.9f;
 	Renderer::loadResources(std::move(resources));
 
 	err = Renderer::transferResources();
