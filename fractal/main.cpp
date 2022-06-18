@@ -212,7 +212,7 @@ void graphicsLoop() {
 	Renderer::transferCameraRotation();
 	Renderer::transferCameraFOV();
 
-	Scene mainScene(50, 5);
+	Scene mainScene(2, 5);
 	/*for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			for (int x = 0; x < 4; x++) {
@@ -225,7 +225,7 @@ void graphicsLoop() {
 	}*/
 	for (int i = 0; i < mainScene.entityHeapLength; i++) {
 				Entity entity;
-				entity.position = nmath::Vector3f(rand() % 1000, 0, rand() % 1000);
+				entity.position = nmath::Vector3f(500, 10, 500);
 				entity.scale = nmath::Vector3f(10, 0, 0);
 				mainScene.entityHeap[i] = entity;
 	}
