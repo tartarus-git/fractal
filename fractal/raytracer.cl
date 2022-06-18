@@ -241,6 +241,20 @@ inline uint4 sampleSkybox(float3 ray) {
 inline char extractDimensionValue(ulong input) { return input >> (sizeof(input) * 8 - 2); }
 inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2); }
 
+#define RECONSTRUCT_PARENT 	if (noDimChildrenIndex == previousKDTreeNodeIndex) { \
+								switch (splitDimension) { \
+								case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; break;				/* TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.*/ \
+								case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; break; \
+								case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
+								} \
+							} else { \
+								switch (splitDimension) { \
+								case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; break; \
+								case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; break; \
+								case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; \
+								} \
+							}
+
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, 
 						float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
 						__global Entity* entityHeap, ulong entityHeapLength, 
@@ -394,18 +408,8 @@ upwardsTraversalLoop:
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
-					if (noDimChildrenIndex == previousKDTreeNodeIndex) {
-						switch (splitDimension) {
-						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
-						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-						}
-					}
-					switch (splitDimension) {
-					case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; goto upwardsTraversalLoop;
-					case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; goto upwardsTraversalLoop;
-					case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; goto upwardsTraversalLoop;
-					}
+					RECONSTRUCT_PARENT;
+					goto upwardsTraversalLoop;
 				}
 
 				kdTreeSize = leftKDTreeNodeSize;
@@ -433,18 +437,8 @@ upwardsTraversalLoop:
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
-					if (noDimChildrenIndex == previousKDTreeNodeIndex) {
-						switch (splitDimension) {
-						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
-						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-						}
-					}
-					switch (splitDimension) {
-					case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; goto upwardsTraversalLoop;
-					case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; goto upwardsTraversalLoop;
-					case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; goto upwardsTraversalLoop;
-					}
+					RECONSTRUCT_PARENT;
+					goto upwardsTraversalLoop;
 				}
 
 				kdTreePosition = rightKDTreeNodePosition;
@@ -491,18 +485,8 @@ upwardsTraversalLoop:
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
-					if (noDimChildrenIndex == previousKDTreeNodeIndex) {
-						switch (splitDimension) {
-						case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
-						case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-						case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-						}
-					}
-					switch (splitDimension) {
-					case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; goto upwardsTraversalLoop;
-					case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; goto upwardsTraversalLoop;
-					case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; goto upwardsTraversalLoop;
-					}
+					RECONSTRUCT_PARENT;
+					goto upwardsTraversalLoop;
 				}
 
 				kdTreeSize = leftKDTreeNodeSize;				// TODO: This could be avoided by storing left... in kdTreeSize from getgo. It would need math to be done in the above switch case though, it might be more efficient that way given the probabilities, but I'm not sure, I sort of don't think so because of global illumination.
@@ -526,18 +510,8 @@ upwardsTraversalLoop:
 				currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 				noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
-				if (noDimChildrenIndex == previousKDTreeNodeIndex) {
-					switch (splitDimension) {
-					case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
-					case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-					case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-					}
-				}
-				switch (splitDimension) {
-				case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; goto upwardsTraversalLoop;
-				case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; goto upwardsTraversalLoop;
-				case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; goto upwardsTraversalLoop;
-				}
+				RECONSTRUCT_PARENT;
+				goto upwardsTraversalLoop;
 			}
 
 			kdTreePosition = rightKDTreeNodePosition;
@@ -549,8 +523,8 @@ upwardsTraversalLoop:
 		}
 
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount == 0) {
-			write_imageui(frame, coords, (uint4)((currentKDTreeNodeIndex * 100) % 256, 0, 0, 255));
-			return;
+			//write_imageui(frame, coords, (uint4)((currentKDTreeNodeIndex * 100) % 256, 0, 0, 255));
+			//return;
 		}
 		for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
 			write_imageui(frame, coords, (uint4)(0, 0, (currentKDTreeNodeIndex * 100) % 256, 255));
@@ -564,53 +538,7 @@ upwardsTraversalLoop:
 		currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 		splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 		noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
-		if (noDimChildrenIndex == previousKDTreeNodeIndex) {
-			switch (splitDimension) {
-			case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;				// TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.
-			case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-			case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; goto upwardsTraversalLoop;
-			}
-		}
-		switch (splitDimension) {
-		case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; goto upwardsTraversalLoop;
-		case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; goto upwardsTraversalLoop;
-		case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; goto upwardsTraversalLoop;
-		}
-
-		/*while (true) {
-			if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
-			if (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex == previousKDTreeNodeIndex) {
-				switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex & 0b11) {
-				case 0: kdTreePosition.x += kdTreeSize.x; break;
-				case 1: kdTreePosition.y += kdTreeSize.y; break;
-				case 2: kdTreePosition.z += kdTreeSize.z; break;
-				}
-				if (!rayIntersectAABB(kdTreePosition, kdTreeSize)) { goto templabel; }
-				currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + 1;
-				break;          // TODO: Check about cache stuff, cuz technically you could just increment the child counter instead of setting it around, maybe more cache coherent.
-			}
-			templabel:
-			previousKDTreeNodeIndex = currentKDTreeNodexIndex;
-			currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
-			switch (kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex & 0b11) {
-			case 0: kdTreePosition.x -= kdTreeSize.x; kdTreeSize.x *= 2; break;
-			case 1: kdTreePosition.y -= kdTreeSize.y; kdTreeSize.y *= 2; break;
-			case 2: kdTreePosition.z -= kdTreeSize.z; kdTreeSize.z *= 2; break;
-			}*/
-		}
+		RECONSTRUCT_PARENT;
+		goto upwardsTraversalLoop;
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//}
+}
