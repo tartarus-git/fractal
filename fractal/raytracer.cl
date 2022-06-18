@@ -235,8 +235,27 @@ nothingToFinish:
 #define SECOND_DEBUG_RETURN write_imageui(frame, coords, (uint4)(0, 100, 100, 255)); return;
 
 inline uint4 sampleSkybox(float3 ray) {
-	return (uint4)(0, 255, 0, 255);
+	//return (uint4)(0, 255, 0, 255);
+	ray = normalize(ray);
+	return (uint4)(fabs(ray.x * 255), fabs(ray.y * 255), fabs(ray.z * 255), 255);
 }
+
+inline ulong initRandSeed(uint frameWidth) {
+	return ((ulong)get_global_id(0) * (ulong)frameWidth + (ulong)get_global_id(1)) << 32;
+}
+
+inline uint randInt(ulong* seed) {
+	*seed *= 1345678;
+	return *seed >> 32;
+}
+
+inline float randFloat(ulong* seed) {
+	uint randomInteger = randInt(seed);
+	return (float)randomInteger / (float)((uint)-1);
+}
+
+#define randInt() randInt(&randSeed)
+#define randFloat() randFloat(&randSeed)
 
 inline char extractDimensionValue(ulong input) { return input >> (sizeof(input) * 8 - 2); }
 inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2); }
@@ -255,12 +274,16 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 								} \
 							}
 
+#define RENDER write_imageui(frame, coords, (uint4)(fmin(colorCollector.x, 1) * 255, fmin(colorCollector.y, 1) * 255, fmin(colorCollector.z, 1) * 255, 255))
+
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, 
 						float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
 						__global Entity* entityHeap, ulong entityHeapLength, 
 						float3 kdTreePosition, float3 kdTreeSize, __global KDTreeNode* kdTreeNodeHeap, ulong kdTreeNodeHeapLength, __global ulong* leafObjectHeap, ulong leafObjectHeapLength, 
 						__global Light* lightHeap, ulong lightHeapLength, 
 						__global Material* materialHeap, ulong materialHeapLength, ulong materialHeapOffset) {
+
+	ulong randSeed = initRandSeed(frameWidth);
 
 	int x = get_global_id(0);
 	if (x >= frameWidth) { return; }
@@ -340,6 +363,9 @@ for (int j = 0; j < 10; j++) {
 	char splitDimension = extractDimensionValue(kdTreeNodeHeap[0].childrenIndex);
 	ulong noDimChildrenIndex = 1;					// NOTE: It follows from this, that the first child of the first node MUST BE LOCATED AT INDEX 1.
 
+	float3 colorCollector = (float3)(1, 1, 1);
+	char maxBounces = 10;
+
 	while (true) {
 
 		/*
@@ -402,7 +428,7 @@ upwardsTraversalLoop:
 
 			if (rightDist == -1) {
 				if (previousKDTreeNodeIndex == noDimChildrenIndex) {
-					if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+					if (currentKDTreeNodeIndex == 0) { RENDER; return; }
 
 					previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -431,7 +457,7 @@ upwardsTraversalLoop:
 
 			if (leftDist == -1) {
 				if (previousKDTreeNodeIndex == noDimChildrenIndex + 1) {			// TODO: Store in variable?
-					if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+					if (currentKDTreeNodeIndex == 0) { RENDER; return; }
 
 					previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -479,7 +505,7 @@ upwardsTraversalLoop:
 					continue;
 				}
 				if (previousKDTreeNodeIndex == noDimChildrenIndex + 1) {
-					if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+					if (currentKDTreeNodeIndex == 0) { RENDER; return; }
 
 					previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -504,7 +530,7 @@ upwardsTraversalLoop:
 				continue;
 			}
 			if (previousKDTreeNodeIndex == noDimChildrenIndex) {
-				if (currentKDTreeNodeIndex == 0) { write_imageui(frame, coords, sampleSkybox(ray)); return; }
+				if (currentKDTreeNodeIndex == 0) { RENDER; return; }
 
 				previousKDTreeNodeIndex = currentKDTreeNodeIndex;
 				currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
@@ -526,12 +552,53 @@ upwardsTraversalLoop:
 			//write_imageui(frame, coords, (uint4)((currentKDTreeNodeIndex * 100) % 256, 0, 0, 255));
 			//return;
 		}
-		for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
-			write_imageui(frame, coords, (uint4)(0, 0, (currentKDTreeNodeIndex * 100) % 256, 255));
-			return;
-			//bool good = getRayColor(entityHeap[leafObjectHeap[i]]);
-			//if (good) { goto escapeWhileLoop; }
-			// TODO: Make distance aware this part.
+		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount != 0) {
+			float closestDistance = -1;
+			float3 closestHitPoint;
+			float3 closestColor;
+			float3 closestEntityPosition;
+			for (ulong i = kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex; i < kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex + kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount; i++) {
+				//write_imageui(frame, coords, (uint4)(0, 0, (currentKDTreeNodeIndex * 100) % 256, 255));
+				//return;
+
+				float3 pos = entityHeap[leafObjectHeap[i]].position;
+				float radius = entityHeap[leafObjectHeap[i]].scale.x;
+				float3 offset = (float3)(radius, radius, radius);
+				if (rayIntersectAABB(cameraPos, ray, pos - offset, pos + offset) == -1) { continue; }
+
+				float dist;
+				bool didItHit;
+				float3 hitPoint = intersectWithSphere(cameraPos, ray, entityHeap[leafObjectHeap[i]].position, entityHeap[leafObjectHeap[i]].scale.x, &didItHit, &dist);
+				if (didItHit) {
+					if (closestDistance == -1 || dist < closestDistance) {
+						closestDistance = dist;
+						closestHitPoint = hitPoint;
+						closestEntityPosition = entityHeap[leafObjectHeap[i]].position;
+						closestColor = (float3)(0.8f, 0.8f, 0.8f);
+					}
+				}
+			}
+			if (closestDistance != -1) {
+				colorCollector *= closestColor;
+				if (maxBounces > 0) {
+					if (closestEntityPosition.x == 500) {
+					ray = (float3)(randFloat() * 2 - 1, randFloat() * 2 - 1, randFloat() * 2 - 1);
+					ray = normalize(ray);
+					float3 normal = normalize(closestHitPoint - closestEntityPosition);
+					float dotProd = dot(normal, ray);
+					if (dotProd < 0) { ray -= dotProd * normal * 2; }
+					} else {
+						float3 normal = normalize(closestHitPoint - closestEntityPosition);
+						float dotProd = dot(normal, ray);
+						ray -= dotProd * normal * 2;
+					}
+					cameraPos = closestHitPoint;
+					maxBounces--;
+				} else {
+					RENDER;
+					return;
+				}
+			}
 		}
 
 		previousKDTreeNodeIndex = currentKDTreeNodeIndex;

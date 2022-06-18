@@ -204,9 +204,9 @@ void graphicsLoop() {
 	debuglogger::out << alignof(uint64_t) << '\n';
 
 	DefaultShader mainShader;
-	ErrorCode err = Renderer::init(&mainShader, 2, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
+	ErrorCode err = Renderer::init(&mainShader, 5, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
 	debuglogger::out << (int16_t)err << '\n';
-	Camera camera({ 0, 0, 0 }, { 0, 0, 0 }, 90);
+	Camera camera({ 500, 5, 515 }, { 0, 0, 0 }, 90);
 	Renderer::loadCamera(camera);
 	Renderer::transferCameraPosition();
 	Renderer::transferCameraRotation();
@@ -225,7 +225,7 @@ void graphicsLoop() {
 	}*/
 	for (int i = 0; i < mainScene.entityHeapLength; i++) {
 				Entity entity;
-				entity.position = nmath::Vector3f(500, 10, 500);
+				entity.position = nmath::Vector3f(500, 11, 500);
 				entity.scale = nmath::Vector3f(10, 0, 0);
 				mainScene.entityHeap[i] = entity;
 	}
@@ -235,8 +235,8 @@ void graphicsLoop() {
 		light.color = nmath::Vector3f(1, 1, 1);
 		mainScene.lightHeap[i] = light;
 	}
-	mainScene.entityHeap[1].position = nmath::Vector3f(500, -1000, 500);
-	mainScene.entityHeap[1].scale = nmath::Vector3f(1000, 0, 0);
+	mainScene.entityHeap[1].position = nmath::Vector3f(521, 11, 500);
+	mainScene.entityHeap[1].scale = nmath::Vector3f(10, 0, 0);
 
 	mainScene.generateKDTree();
 

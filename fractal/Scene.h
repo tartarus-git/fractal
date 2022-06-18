@@ -336,7 +336,7 @@ public:
 					goto labelthing;
 				}
 				kdTreeNodeHeap[thisIndex].childrenIndex = leafObjectHeap.size();
-				kdTreeNodeHeap[thisIndex].childrenIndex |= (uint64_t)dimension << (sizeof(uint64_t) * 8 - 2);
+				//kdTreeNodeHeap[thisIndex].childrenIndex |= (uint64_t)dimension << (sizeof(uint64_t) * 8 - 2);
 				kdTreeNodeHeap[thisIndex].objectCount = totalAmount;
 				doThisThingForEveryObjectInRange([&](uint64_t i) { leafObjectHeap.push_back(i); }, dimension, limitBegins, limitEnds, boxPos, boxSize);
 				return;
