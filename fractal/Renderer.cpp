@@ -3,6 +3,7 @@
 #include "ErrorCode.h"
 
 #include "nmath/constants.h"
+#include "nmath/misc.h"
 
 #include <cmath>
 
@@ -98,7 +99,7 @@ bool Renderer::allocateFrameBuffersOnDevice() {
 	if (!computeFrame) { clReleaseMemObject(computeBeforeAverageFrame); return false; }
 	averagingShader.setFrameData(computeFrame, frameWidth, frameHeight);
 	computeFrameGlobalSize[0] = frameWidth + (averagingShader.computeKernelWorkGroupSize - (frameWidth % averagingShader.computeKernelWorkGroupSize));
-	computeFrameGlobalSize[1] = frameHeight;
+	computeFrameGlobalSize[1] = frameHeight;			// TODO: Make the global size actually be a multiple of the box for the local size that we calculated below.
 	computeFrameRegion[0] = frameWidth;											// NOTE: Having the frame size be expressed multiple times in the class sucks, but the alternative is to spend a little tiny bit of processing power building together these structs every render call,
 	computeFrameRegion[1] = frameHeight;										// NOTE: which I don't want to do. We could also define frameWidth and frameHeight as references to computeFrameRegion, but that would force me to use size_t, which I also don't want to do.
 
@@ -161,12 +162,14 @@ ErrorCode Renderer::init(RaytracingShader* raytracingShader, uint16_t samplesPer
 	computeFrameOrigin[1] = 0;
 	computeFrameOrigin[2] = 0;
 
-	computeBeforeAverageFrameLocalSize[0] = raytracingShader->computeKernelWorkGroupSize;
-	computeBeforeAverageFrameLocalSize[1] = 1;
+	std::pair<size_t, size_t> localSize = nmath::calcSmallestBoundingBox(raytracingShader->computeKernelWorkGroupSize);
+	computeBeforeAverageFrameLocalSize[0] = localSize.first;
+	computeBeforeAverageFrameLocalSize[1] = localSize.second;
 	computeBeforeAverageFrameRegion[2] = 1;
 
-	computeFrameLocalSize[0] = averagingShader.computeKernelWorkGroupSize;
-	computeFrameLocalSize[1] = 1;
+	localSize = nmath::calcSmallestBoundingBox(averagingShader.computeKernelWorkGroupSize);
+	computeFrameLocalSize[0] = localSize.first;
+	computeFrameLocalSize[1] = localSize.second;
 	computeFrameRegion[2] = 1;
 
 	Renderer::raytracingShader = raytracingShader;

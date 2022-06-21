@@ -296,7 +296,7 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 	float3 cameraBackup = cameraPos;
 
 // TODO: Figure out a way to measure variance between the samples and a way to conditionally add more samples to the mix.
-for (int indexthing = 0; indexthing < 4; indexthing++) {
+for (int indexthing = 0; indexthing < 1; indexthing++) {
 	cameraPos = cameraBackup;
 
 	float3 ray = (float3)(coords.x - (int)frameWidth / 2 + randFloat(), -coords.y + (int)frameHeight / 2 - randFloat(), -rayOriginZ);
@@ -620,6 +620,6 @@ upwardsTraversalLoop:
 		goto upwardsTraversalLoop;
 	}
 }
-renderColorSum /= 4;
+//renderColorSum /= 4;
 write_imageui(frame, coords, (uint4)(fmin(renderColorSum.x, 1) * 255, fmin(renderColorSum.y, 1) * 255, fmin(renderColorSum.z, 1) * 255, 255));
 }

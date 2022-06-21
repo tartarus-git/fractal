@@ -153,6 +153,7 @@
   <ItemGroup>
     <ClCompile Include="DefaultShader.cpp" />
     <ClCompile Include="deps\nmath\src\Matrix4f.cpp" />
+    <ClCompile Include="deps\nmath\src\misc.cpp" />
     <ClCompile Include="deps\nmath\src\Vector3f.cpp" />
     <ClCompile Include="deps\opencl-bindings-and-helpers\src\cl_bindings_and_helpers.cpp" />
     <ClCompile Include="deps\window-setup\src\debugOutput.cpp" />
@@ -166,6 +167,7 @@
     <ClInclude Include="DefaultShader.h" />
     <ClInclude Include="deps\nmath\include\nmath\constants.h" />
     <ClInclude Include="deps\nmath\include\nmath\matrices\Matrix4f.h" />
+    <ClInclude Include="deps\nmath\include\nmath\misc.h" />
     <ClInclude Include="deps\nmath\include\nmath\vectors\Vector3f.h" />
     <ClInclude Include="deps\nmath\include\nmath\vectors\Vector4f.h" />
     <ClInclude Include="deps\opencl-bindings-and-helpers\include\cl_bindings_and_helpers.h" />
