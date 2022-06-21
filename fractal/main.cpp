@@ -206,7 +206,7 @@ void graphicsLoop() {
 	DefaultShader mainShader;
 	ErrorCode err = Renderer::init(&mainShader, 4, windowWidth, windowHeight, ImageChannelOrderType::RGBA);
 	debuglogger::out << (int16_t)err << '\n';
-	Camera camera({ 500, 5, 515 }, { 0, 0, 0 }, 90);
+	Camera camera({ 511, 11, 500 }, { 0, 0, 0 }, 90);
 	Renderer::loadCamera(camera);
 	Renderer::transferCameraPosition();
 	Renderer::transferCameraRotation();
