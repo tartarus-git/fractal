@@ -265,8 +265,8 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 								switch (splitDimension) { \
 								case 0: \
 									if (upwardsTraversalCacheSize != 0) { \
-										upwardsTraversalCacheSize--; \
-										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										/*upwardsTraversalCacheSize--; */\
+										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize - 1]; \
 										break; \
 									} \
 									DEBUG_RETURN; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
@@ -291,9 +291,9 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 								switch (splitDimension) { \
 								case 0: \
 									if (upwardsTraversalCacheSize != 0) { \
-										upwardsTraversalCacheSize--; \
-										kdTreePosition.x -= upwardsTraversalCache[upwardsTraversalCacheSize] - kdTreeSize.x; \
-										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										/* upwardsTraversalCacheSize--; */\
+										kdTreePosition.x -= upwardsTraversalCache[upwardsTraversalCacheSize - 1] - kdTreeSize.x; \
+										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize - 1]; \
 										break; \
 									} \
 									DEBUG_RETURN; kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; \
@@ -340,11 +340,12 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
 	float3 cameraBackup = cameraPos;
 
+// TODO: Figure out a way to measure variance between the samples and a way to conditionally add more samples to the mix.
+for (int indexthing = 0; indexthing < 1; indexthing++) {
+
 	float upwardsTraversalCache[FREE_STACK_SPACE_IN_UNITS_OF_4];
 	ulong upwardsTraversalCacheSize = 0;
 
-// TODO: Figure out a way to measure variance between the samples and a way to conditionally add more samples to the mix.
-for (int indexthing = 0; indexthing < 1; indexthing++) {
 	cameraPos = cameraBackup;
 
 	float3 ray = (float3)(coords.x - (int)frameWidth / 2 + randFloat(), -coords.y + (int)frameHeight / 2 - randFloat(), -rayOriginZ);
@@ -494,14 +495,18 @@ upwardsTraversalLoop:
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
+					upwardsTraversalCacheSize--;			// TODO: Do this for the others as well.
 					RECONSTRUCT_PARENT;
 					goto upwardsTraversalLoop;
 				}
 
+				kdTreeSize = leftKDTreeNodeSize;
+
+
+				// TODO: Do this for the others as well.
 				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
 				upwardsTraversalCacheSize++;
 
-				kdTreeSize = leftKDTreeNodeSize;
 				currentKDTreeNodeIndex = noDimChildrenIndex;
 				/*
 				NOTE: We set the splitDimension and noDimChildrenIndex variables here instead of setting them at the upwardsTraversalLoop label
@@ -526,15 +531,17 @@ upwardsTraversalLoop:
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
+					upwardsTraversalCacheSize--;
 					RECONSTRUCT_PARENT;
 					goto upwardsTraversalLoop;
 				}
 
-				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
-				upwardsTraversalCacheSize++;
 
 				kdTreePosition = rightKDTreeNodePosition;
 				kdTreeSize = rightKDTreeNodeSize;
+
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 				currentKDTreeNodeIndex = noDimChildrenIndex + 1;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 				noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -563,11 +570,11 @@ upwardsTraversalLoop:
 
 			if (leftDist < rightDist) {
 				if (previousKDTreeNodeIndex == noDimChildrenIndex) {
-				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
-				upwardsTraversalCacheSize++;
 
 					kdTreePosition = rightKDTreeNodePosition;
 					kdTreeSize = rightKDTreeNodeSize;
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 					currentKDTreeNodeIndex = noDimChildrenIndex + 1;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -580,14 +587,16 @@ upwardsTraversalLoop:
 					currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 					splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 					noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
+					upwardsTraversalCacheSize--;
 					RECONSTRUCT_PARENT;
 					goto upwardsTraversalLoop;
 				}
 
-				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
-				upwardsTraversalCacheSize++;
 
 				kdTreeSize = leftKDTreeNodeSize;				// TODO: This could be avoided by storing left... in kdTreeSize from getgo. It would need math to be done in the above switch case though, it might be more efficient that way given the probabilities, but I'm not sure, I sort of don't think so because of global illumination.
+
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 				currentKDTreeNodeIndex = noDimChildrenIndex;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 				noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -595,10 +604,10 @@ upwardsTraversalLoop:
 			}
 
 			if (previousKDTreeNodeIndex == noDimChildrenIndex + 1) {
-				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
-				upwardsTraversalCacheSize++;
 
 				kdTreeSize = leftKDTreeNodeSize;			// TODO: Again, this could be made more efficient as above, not sure about it though.
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 				currentKDTreeNodeIndex = noDimChildrenIndex;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 				noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -611,15 +620,16 @@ upwardsTraversalLoop:
 				currentKDTreeNodeIndex = kdTreeNodeHeap[currentKDTreeNodeIndex].parentIndex;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 				noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
+				upwardsTraversalCacheSize--;
 				RECONSTRUCT_PARENT;
 				goto upwardsTraversalLoop;
 			}
 
-				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
-				upwardsTraversalCacheSize++;
 
 			kdTreePosition = rightKDTreeNodePosition;
 			kdTreeSize = rightKDTreeNodeSize;
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 			currentKDTreeNodeIndex = noDimChildrenIndex + 1;
 			splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
 			noDimChildrenIndex = removeDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -631,6 +641,9 @@ upwardsTraversalLoop:
 			//return;
 		}
 		if (kdTreeNodeHeap[currentKDTreeNodeIndex].objectCount != 0) {
+
+			upwardsTraversalCacheSize--;
+
 			float closestDistance = -1;
 			float3 closestHitPoint;
 			ulong closestEntityIndex;
