@@ -269,7 +269,7 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize]; \
 										break; \
 									} \
-									kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
+									DEBUG_RETURN; kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
 									break; \
 								case 1: \
 									if (upwardsTraversalCacheSize != 0) { \
@@ -296,7 +296,7 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize]; \
 										break; \
 									} \
-									kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; \
+									DEBUG_RETURN; kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; \
 									break; \
 								case 1: \
 									if (upwardsTraversalCacheSize != 0) { \
