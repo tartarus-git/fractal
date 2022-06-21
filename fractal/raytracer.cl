@@ -252,7 +252,7 @@ inline uint randInt(ulong* seed) {
 
 inline float randFloat(ulong* seed) {
 	uint randomInteger = randInt(seed);
-	return (float)randomInteger / (float)((uint)-1);
+	return randomInteger * (1 / (float)((uint)-1));
 }
 
 #define randInt() randInt(&randSeed)
@@ -263,20 +263,65 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 
 #define RECONSTRUCT_PARENT 	if (noDimChildrenIndex == previousKDTreeNodeIndex) { \
 								switch (splitDimension) { \
-								case 0: kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; break;				/* TODO: Put in a cache to avoid having to do this division. So just cache the inverses of the splits and you'll be good with multiplication here. Or maybe think of something better, maybe cache the absolutes. That could be cool.*/ \
-								case 1: kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; break; \
-								case 2: kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
+								case 0: \
+									if (upwardsTraversalCacheSize != 0) { \
+										upwardsTraversalCacheSize--; \
+										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										break; \
+									} \
+									kdTreeSize.x /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
+									break; \
+								case 1: \
+									if (upwardsTraversalCacheSize != 0) { \
+										upwardsTraversalCacheSize--; \
+										kdTreeSize.y = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										break; \
+									} \
+									kdTreeSize.y /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
+									break; \
+								case 2: \
+									if (upwardsTraversalCacheSize != 0) { \
+										upwardsTraversalCacheSize--; \
+										kdTreeSize.z = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										break; \
+									} \
+									kdTreeSize.z /= kdTreeNodeHeap[currentKDTreeNodeIndex].split; \
 								} \
 							} else { \
 								switch (splitDimension) { \
-								case 0: kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; break; \
-								case 1: kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; break; \
-								case 2: kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; \
+								case 0: \
+									if (upwardsTraversalCacheSize != 0) { \
+										upwardsTraversalCacheSize--; \
+										kdTreePosition.x -= upwardsTraversalCache[upwardsTraversalCacheSize] - kdTreeSize.x; \
+										kdTreeSize.x = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										break; \
+									} \
+									kdTreePosition.x += kdTreeSize.x; kdTreeSize.x /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.x -= kdTreeSize.x; \
+									break; \
+								case 1: \
+									if (upwardsTraversalCacheSize != 0) { \
+										upwardsTraversalCacheSize--; \
+										kdTreePosition.y -= upwardsTraversalCache[upwardsTraversalCacheSize] - kdTreeSize.y; \
+										kdTreeSize.y = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										break; \
+									} \
+									kdTreePosition.y += kdTreeSize.y; kdTreeSize.y /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.y -= kdTreeSize.y; \
+									break; \
+								case 2: \
+									if (upwardsTraversalCacheSize != 0) { \
+										upwardsTraversalCacheSize--; \
+										kdTreePosition.z -= upwardsTraversalCache[upwardsTraversalCacheSize] - kdTreeSize.z; \
+										kdTreeSize.z = upwardsTraversalCache[upwardsTraversalCacheSize]; \
+										break; \
+									} \
+									kdTreePosition.z += kdTreeSize.z; kdTreeSize.z /= 1 - kdTreeNodeHeap[currentKDTreeNodeIndex].split; kdTreePosition.z -= kdTreeSize.z; \
 								} \
 							}
 
 //#define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; write_imageui(frame, coords, (uint4)(fmin(colorSum.x, 1) * 255, fmin(colorSum.y, 1) * 255, fmin(colorSum.z, 1) * 255, 255))
 #define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; renderColorSum += colorSum;
+
+#define FREE_STACK_SPACE_IN_UNITS_OF_4 100
 
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, 
 						float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
@@ -295,8 +340,11 @@ __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint fram
 
 	float3 cameraBackup = cameraPos;
 
+	float upwardsTraversalCache[FREE_STACK_SPACE_IN_UNITS_OF_4];
+	ulong upwardsTraversalCacheSize = 0;
+
 // TODO: Figure out a way to measure variance between the samples and a way to conditionally add more samples to the mix.
-for (int indexthing = 0; indexthing < 4; indexthing++) {
+for (int indexthing = 0; indexthing < 1; indexthing++) {
 	cameraPos = cameraBackup;
 
 	float3 ray = (float3)(coords.x - (int)frameWidth / 2 + randFloat(), -coords.y + (int)frameHeight / 2 - randFloat(), -rayOriginZ);
@@ -450,6 +498,9 @@ upwardsTraversalLoop:
 					goto upwardsTraversalLoop;
 				}
 
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
+
 				kdTreeSize = leftKDTreeNodeSize;
 				currentKDTreeNodeIndex = noDimChildrenIndex;
 				/*
@@ -478,6 +529,9 @@ upwardsTraversalLoop:
 					RECONSTRUCT_PARENT;
 					goto upwardsTraversalLoop;
 				}
+
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 
 				kdTreePosition = rightKDTreeNodePosition;
 				kdTreeSize = rightKDTreeNodeSize;
@@ -509,6 +563,9 @@ upwardsTraversalLoop:
 
 			if (leftDist < rightDist) {
 				if (previousKDTreeNodeIndex == noDimChildrenIndex) {
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
+
 					kdTreePosition = rightKDTreeNodePosition;
 					kdTreeSize = rightKDTreeNodeSize;
 					currentKDTreeNodeIndex = noDimChildrenIndex + 1;
@@ -527,6 +584,9 @@ upwardsTraversalLoop:
 					goto upwardsTraversalLoop;
 				}
 
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
+
 				kdTreeSize = leftKDTreeNodeSize;				// TODO: This could be avoided by storing left... in kdTreeSize from getgo. It would need math to be done in the above switch case though, it might be more efficient that way given the probabilities, but I'm not sure, I sort of don't think so because of global illumination.
 				currentKDTreeNodeIndex = noDimChildrenIndex;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -535,6 +595,9 @@ upwardsTraversalLoop:
 			}
 
 			if (previousKDTreeNodeIndex == noDimChildrenIndex + 1) {
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
+
 				kdTreeSize = leftKDTreeNodeSize;			// TODO: Again, this could be made more efficient as above, not sure about it though.
 				currentKDTreeNodeIndex = noDimChildrenIndex;
 				splitDimension = extractDimensionValue(kdTreeNodeHeap[currentKDTreeNodeIndex].childrenIndex);
@@ -551,6 +614,9 @@ upwardsTraversalLoop:
 				RECONSTRUCT_PARENT;
 				goto upwardsTraversalLoop;
 			}
+
+				upwardsTraversalCache[upwardsTraversalCacheSize] = kdTreeSize.x;
+				upwardsTraversalCacheSize++;
 
 			kdTreePosition = rightKDTreeNodePosition;
 			kdTreeSize = rightKDTreeNodeSize;
@@ -620,6 +686,6 @@ upwardsTraversalLoop:
 		goto upwardsTraversalLoop;
 	}
 }
-renderColorSum /= 4;
+//renderColorSum /= 4;
 write_imageui(frame, coords, (uint4)(fmin(renderColorSum.x, 1) * 255, fmin(renderColorSum.y, 1) * 255, fmin(renderColorSum.z, 1) * 255, 255));
 }
