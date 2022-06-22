@@ -153,7 +153,6 @@
   <ItemGroup>
     <ClCompile Include="DefaultShader.cpp" />
     <ClCompile Include="deps\nmath\src\Matrix4f.cpp" />
-    <ClCompile Include="deps\nmath\src\misc.cpp" />
     <ClCompile Include="deps\nmath\src\Vector3f.cpp" />
     <ClCompile Include="deps\opencl-bindings-and-helpers\src\cl_bindings_and_helpers.cpp" />
     <ClCompile Include="deps\window-setup\src\debugOutput.cpp" />

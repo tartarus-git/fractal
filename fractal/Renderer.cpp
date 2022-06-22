@@ -84,8 +84,8 @@ bool Renderer::allocateBeforeAverageFrameBufferOnDevice() {
 	if (!computeBeforeAverageFrame) { return false; }
 	raytracingShader->setBeforeAverageFrameData(computeBeforeAverageFrame, beforeAverageFrameWidth, beforeAverageFrameHeight);
 	averagingShader.setBeforeAverageFrameData(computeBeforeAverageFrame, beforeAverageFrameWidth, beforeAverageFrameHeight);
-	computeBeforeAverageFrameGlobalSize[0] = beforeAverageFrameWidth + (raytracingShader->computeKernelWorkGroupSize - (beforeAverageFrameWidth % raytracingShader->computeKernelWorkGroupSize));
-	computeBeforeAverageFrameGlobalSize[1] = beforeAverageFrameHeight;
+	computeBeforeAverageFrameGlobalSize[0] = beforeAverageFrameWidth + (computeBeforeAverageFrameLocalSize[0] - (beforeAverageFrameWidth % computeBeforeAverageFrameLocalSize[0]));
+	computeBeforeAverageFrameGlobalSize[1] = beforeAverageFrameHeight + (computeBeforeAverageFrameLocalSize[1] - (beforeAverageFrameHeight % computeBeforeAverageFrameLocalSize[1]));
 	computeBeforeAverageFrameRegion[0] = beforeAverageFrameWidth;											// NOTE: Having the frame size be expressed multiple times in the class sucks, but the alternative is to spend a little tiny bit of processing power building together these structs every render call,
 	computeBeforeAverageFrameRegion[1] = beforeAverageFrameHeight;										// NOTE: which I don't want to do. We could also define frameWidth and frameHeight as references to computeFrameRegion, but that would force me to use size_t, which I also don't want to do.
 	return true;
@@ -98,8 +98,8 @@ bool Renderer::allocateFrameBuffersOnDevice() {
 	computeFrame = clCreateImage2D(computeContext, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, &frameFormat, frameWidth, frameHeight, 0, nullptr, &err);
 	if (!computeFrame) { clReleaseMemObject(computeBeforeAverageFrame); return false; }
 	averagingShader.setFrameData(computeFrame, frameWidth, frameHeight);
-	computeFrameGlobalSize[0] = frameWidth + (averagingShader.computeKernelWorkGroupSize - (frameWidth % averagingShader.computeKernelWorkGroupSize));
-	computeFrameGlobalSize[1] = frameHeight;			// TODO: Make the global size actually be a multiple of the box for the local size that we calculated below.
+	computeFrameGlobalSize[0] = frameWidth + (computeFrameLocalSize[0] - (frameWidth % computeFrameLocalSize[0]));
+	computeFrameGlobalSize[1] = frameHeight + (computeFrameLocalSize[1] - (frameHeight % computeFrameLocalSize[1]));
 	computeFrameRegion[0] = frameWidth;											// NOTE: Having the frame size be expressed multiple times in the class sucks, but the alternative is to spend a little tiny bit of processing power building together these structs every render call,
 	computeFrameRegion[1] = frameHeight;										// NOTE: which I don't want to do. We could also define frameWidth and frameHeight as references to computeFrameRegion, but that would force me to use size_t, which I also don't want to do.
 
