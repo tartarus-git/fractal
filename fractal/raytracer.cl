@@ -278,12 +278,13 @@ inline ulong removeDimensionValue(ulong input) { return input & ((ulong)-1 >> 2)
 //#define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; write_imageui(frame, coords, (uint4)(fmin(colorSum.x, 1) * 255, fmin(colorSum.y, 1) * 255, fmin(colorSum.z, 1) * 255, 255))
 #define RENDER colorSum += (float3)(1, 1, 1) * colorProduct; renderColorSum += colorSum;
 
+// TODO: Write a note about the different memory areas in opencl and why using __constant here instead of __global is much better.
 __kernel void traceRays(__write_only image2d_t frame, uint frameWidth, uint frameHeight, 
 						float3 cameraPos, Matrix4f cameraRotationMat, float rayOriginZ, 
-						__global Entity* entityHeap, ulong entityHeapLength, 
-						float3 kdTreePosition, float3 kdTreeSize, __global KDTreeNode* kdTreeNodeHeap, ulong kdTreeNodeHeapLength, __global ulong* leafObjectHeap, ulong leafObjectHeapLength, 
-						__global Light* lightHeap, ulong lightHeapLength, 
-						__global Material* materialHeap, ulong materialHeapLength, ulong materialHeapOffset) {
+						__constant Entity* entityHeap, ulong entityHeapLength, 
+						float3 kdTreePosition, float3 kdTreeSize, __constant KDTreeNode* kdTreeNodeHeap, ulong kdTreeNodeHeapLength, __constant ulong* leafObjectHeap, ulong leafObjectHeapLength, 
+						__constant Light* lightHeap, ulong lightHeapLength, 
+						__constant Material* materialHeap, ulong materialHeapLength, ulong materialHeapOffset) {
 
 	int2 coords = (int2)(get_global_id(0), get_global_id(1));
 	if (coords.x >= frameWidth || coords.y >= frameHeight) { return; }
