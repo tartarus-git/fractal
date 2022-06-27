@@ -128,7 +128,7 @@ void updateWindowSizeVars() {
 	windowHeight = newWindowHeight;
 }
 
-#define EXIT_FROM_THREAD POST_THREAD_EXIT; goto releaseAndReturn;
+#define EXIT_FROM_THREAD postThreadExit(); goto releaseAndReturn;
 
 /*
 * 
